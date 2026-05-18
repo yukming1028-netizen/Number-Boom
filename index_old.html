@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>數字大爆炸</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block}
+</style>
+</head>
+<body>
+<script>
+
+// ===== GRID CORE =====
+/**
+ * Grid — 數字大爆炸核心邏輯
+ * 5列 × 8行，Drop & Merge + 重力 + 連鎖反應
+ *
+ * 數字進階: 1→2→4→8→16→32→64→128→256→512→1024
+ * 合併規則: 3+ 相鄰相同數字 → 合併升級
+ */
+class Grid {
+  constructor(cols = 5, rows = 8) {
+    this.cols = cols
+    this.rows = rows
+    this.cells = []
+    this.reset()
+  }
+
+  reset() {
+    this.cells = Array.from({ length: this.rows }, () => Array(this.cols).fill(0))
+  }
+
+  clone() {
+    const g = new Grid(this.cols, this.rows)
+    g.cells = this.cells.map(r => [...r])
+    return g
+  }
+
+  // ===== 基礎操作 =====
+
+  /** 投放方塊到指定列，返回落地的行號（-1=滿了） */
+  drop(col, value) {
+    if (col < 0 || col >= this.cols) return -1
+    if (this.cells[0][col] !== 0) return -1
+
+    let targetRow = -1
+    for (let r = this.rows - 1; r >= 0; r--) {
+      if (this.cells[r][col] === 0) { targetRow = r; break }
+    }
+    if (targetRow === -1) return -1
+
+    this.cells[targetRow][col] = value
+    return targetRow
+  }
+
+  /** 重力 — 所有方塊往下落 */
+  applyGravity() {
+    const moved = []
+    for (let c = 0; c < this.cols; c++) {
+      const vals = []
+      for (let r = 0; r < this.rows; r++) {
+        if (this.cells[r][c] !== 0) vals.push(this.cells[r][c])
+      }
+      for (let r = this.rows - 1; r >= 0; r--) {
+        const idx = vals.length - (this.rows - r)
+        const newVal = idx >= 0 ? vals[idx] : 0
+        if (newVal !== this.cells[r][c]) moved.push({ r, c })
+        this.cells[r][c] = newVal
+      }
+    }
+    return moved
+  }
+
+  // ===== 合併系統 =====
+
+  /** BFS 找相鄰同值群組，返回大小≥3的群組 */
+  findGroups() {
+    const visited = Array.from({ length: this.rows }, () => Array(this.cols).fill(false))
+    const groups = []
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.cells[r][c] === 0 || visited[r][c]) continue
+
+        const value = this.cells[r][c]
+        const group = []
+        const queue = [{ r, c }]
+        visited[r][c] = true
+
+        while (queue.length > 0) {
+          const cur = queue.shift()
+          group.push(cur)
+
+          for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nr = cur.r + dr, nc = cur.c + dc
+            if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols
+              && !visited[nr][nc] && this.cells[nr][nc] === value) {
+              visited[nr][nc] = true
+              queue.push({ r: nr, c: nc })
+            }
+          }
+        }
+
+        if (group.length >= 3) {
+          groups.push({ cells: group, value })
+        }
+      }
+    }
+
+    return groups
+  }
+
+  /**
+   * 處理合併 — 返回 { score, chains, events }
+   * 自動處理連鎖反應直到沒有新群組
+   */
+  processMerges() {
+    let totalScore = 0
+    let chains = 0
+    const events = []
+
+    while (true) {
+      const groups = this.findGroups()
+      if (groups.length === 0) break
+
+      chains++
+      const cleared = [] // 所有被清除的格子（用於粒子特效）
+
+      for (const group of groups) {
+        const newValue = group.value + 1
+
+        // 找錨點：最底部、然後最左邊
+        let anchor = group.cells[0]
+        for (const cell of group.cells) {
+          if (cell.r > anchor.r || (cell.r === anchor.r && cell.c < anchor.c)) {
+            anchor = cell
+          }
+        }
+
+        // 記錄被清除的位置
+        for (const { r, c } of group.cells) {
+          cleared.push({ r, c, value: group.value })
+          this.cells[r][c] = 0
+        }
+
+        // 放置合併後的方塊
+        this.cells[anchor.r][anchor.c] = newValue
+
+        // 計分: 新值 × 消除數量 × 連鎖倍率
+        const chainMultiplier = 1 + (chains - 1) * 0.5
+        const groupScore = Math.floor(newValue * newValue * group.cells.length * chainMultiplier)
+        totalScore += groupScore
+
+        events.push({
+          anchor: { ...anchor },
+          newValue,
+          cleared: [...cleared],
+          chain: chains,
+          score: groupScore,
+          groupSize: group.cells.length,
+        })
+      }
+
+      this.applyGravity()
+    }
+
+    return { score: totalScore, chains, events }
+  }
+
+  // ===== 遊戲狀態 =====
+
+  /** 某列是否已滿 */
+  isColFull(c) {
+    return this.cells[0][c] !== 0
+  }
+
+  /** 是否 Game Over（所有列都滿了） */
+  isGameOver() {
+    for (let c = 0; c < this.cols; c++) {
+      if (this.cells[0][c] === 0) return false
+    }
+    return true
+  }
+
+  /** 棋盤上的最大值 */
+  getMaxValue() {
+    let max = 0
+    for (const row of this.cells) for (const v of row) if (v > max) max = v
+    return max
+  }
+
+  /** 非空方塊數量 */
+  getCount() {
+    let n = 0
+    for (const row of this.cells) for (const v of row) if (v > 0) n++
+    return n
+  }
+
+  // ===== 道具效果 =====
+
+  /** 炸彈 — 清除以 (r,c) 為中心的 3x3 區域 */
+  bomb(r, c) {
+    const cleared = []
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc
+        if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols && this.cells[nr][nc] > 0) {
+          cleared.push({ r: nr, c: nc, value: this.cells[nr][nc] })
+          this.cells[nr][nc] = 0
+        }
+      }
+    }
+    this.applyGravity()
+    return cleared
+  }
+
+  /** 洗牌 — 隨機打亂所有方塊位置 */
+  shuffle() {
+    const values = []
+    const positions = []
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.cells[r][c] > 0) {
+          values.push(this.cells[r][c])
+          positions.push({ r, c })
+        }
+      }
+    }
+    // Fisher-Yates
+    for (let i = values.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [values[i], values[j]] = [values[j], values[i]]
+    }
+    // 先清空再放回
+    for (const p of positions) this.cells[p.r][p.c] = 0
+    for (let i = 0; i < positions.length; i++) {
+      this.cells[positions[i].r][positions[i].c] = values[i]
+    }
+    this.applyGravity()
+  }
+}
+
+
+
+// ===== TILE COLORS (Universal — no numbers, pure color) =====
+const TILE_COLORS = [
+  null,
+  {name:'紅',emoji:'🔴',bg1:'#FF6B6B',bg2:'#D63031'},
+  {name:'橙',emoji:'🟠',bg1:'#FFA502',bg2:'#E67E22'},
+  {name:'黃',emoji:'🟡',bg1:'#FFD32A',bg2:'#F9CA24'},
+  {name:'綠',emoji:'🟢',bg1:'#2ED573',bg2:'#009432'},
+  {name:'青',emoji:'🔵',bg1:'#18DCFF',bg2:'#1289A7'},
+  {name:'藍',emoji:'💎',bg1:'#7158E2',bg2:'#3D3D8E'},
+  {name:'紫',emoji:'🔮',bg1:'#C56CF0',bg2:'#6F1E51'},
+  {name:'金',emoji:'⭐',bg1:'#FFD700',bg2:'#DAA520',glow:'#FFD700'},
+  {name:'鑽',emoji:'💎',bg1:'#DFE6E9',bg2:'#636E72',glow:'#FFFFFF'},
+  {name:'虹',emoji:'👑',bg1:'#FF6B6B',bg2:'#6F1E51',glow:'#FFD700'},
+]
+
+function levelName(v) {
+  if (v > 0 && v < TILE_COLORS.length) return TILE_COLORS[v].name
+  return 'Lv.' + v
+}
+
+// ===== THEMES (v2 — Vibrant, no tile colors) =====
+const THEMES = {
+  classic: {
+    name:'經典', icon:'🎨', price:0,
+    bg1:'#667eea', bg2:'#764ba2', header:'#fff', board:'rgba(0,0,0,0.25)', empty:'rgba(255,255,255,0.12)',
+    btnP:'#ff6b6b', btnS:'rgba(255,255,255,0.18)', overlay:'rgba(30,20,60,0.88)',
+    text:'#fff', textDim:'rgba(255,255,255,0.6)', accent:'#ffd700',
+  },
+  cyber: {
+    name:'賽博霓虹', icon:'👾', price:500,
+    bg1:'#0f0c29', bg2:'#302b63', header:'#00ffcc', board:'rgba(0,0,0,0.4)', empty:'rgba(255,255,255,0.06)',
+    btnP:'#e94560', btnS:'rgba(0,255,204,0.12)', overlay:'rgba(10,10,26,0.9)',
+    text:'#00ffcc', textDim:'rgba(0,255,204,0.5)', accent:'#e94560',
+  },
+  kawaii: {
+    name:'可愛萌系', icon:'🌸', price:500,
+    bg1:'#ffecd2', bg2:'#fcb69f', header:'#e84393', board:'rgba(255,255,255,0.35)', empty:'rgba(255,255,255,0.4)',
+    btnP:'#ff6b9d', btnS:'rgba(255,255,255,0.5)', overlay:'rgba(255,220,230,0.9)',
+    text:'#c0392b', textDim:'rgba(192,57,43,0.5)', accent:'#e84393',
+  },
+  ink: {
+    name:'國風水墨', icon:'🏔️', price:800,
+    bg1:'#f5f0e8', bg2:'#e8dcc8', header:'#2c2c2c', board:'rgba(0,0,0,0.08)', empty:'rgba(139,115,85,0.15)',
+    btnP:'#8b4513', btnS:'rgba(139,115,85,0.2)', overlay:'rgba(245,240,232,0.92)',
+    text:'#2c2c2c', textDim:'rgba(44,44,44,0.45)', accent:'#c41e3a',
+  },
+};
+
+// ===== PARTICLES =====
+class ParticleSystem {
+  constructor(){this.particles=[]}
+  emit(x,y,color,value=2){
+    const intensity=Math.min(Math.log2(Math.max(value,2)),10)
+    const count=6+intensity*3, speed=1.5+intensity*0.8, sz=2+intensity*0.5
+    const colors=this._pal(value)
+    for(let i=0;i<count;i++){
+      const a=(Math.PI*2*i)/count+(Math.random()-.5)*.5, v=speed*(.5+Math.random())
+      this.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,decay:.015+Math.random()*.02,size:sz*(.6+Math.random()*.8),color:colors[Math.floor(Math.random()*colors.length)],gravity:.03+Math.random()*.02})
+    }
+  }
+  emitCombo(x,y,combo){
+    const count=combo*10,speed=2+combo
+    for(let i=0;i<count;i++){
+      const a=Math.random()*Math.PI*2,v=speed*(.3+Math.random()),hue=(i*360/count)%360
+      this.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,decay:.01+Math.random()*.015,size:2+Math.random()*3,color:`hsl(${hue},100%,60%)`,gravity:.02})
+    }
+  }
+  emitCoins(x,y,n){
+    for(let i=0;i<Math.min(n/2,12);i++){
+      const a=-Math.PI/2+(Math.random()-.5)*1.5,v=2+Math.random()*2
+      this.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,decay:.012,size:4,color:'#ffd700',gravity:.06,text:'🪙'})
+    }
+  }
+  _pal(v){
+    const tc=TILE_COLORS[v]
+    if(!tc)return['#fff']
+    return[tc.bg1,tc.bg2||tc.bg1,'#fff',tc.bg1+'88']
+  }
+  update(){
+    for(let i=this.particles.length-1;i>=0;i--){
+      const p=this.particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;p.vx*=.98;p.life-=p.decay
+      if(p.life<=0)this.particles.splice(i,1)
+    }
+  }
+  draw(ctx){
+    for(const p of this.particles){
+      ctx.save();ctx.globalAlpha=p.life
+      if(p.text){ctx.font=`${p.size*3}px Arial`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(p.text,p.x,p.y)}
+      else{ctx.fillStyle=p.color;ctx.shadowColor=p.color;ctx.shadowBlur=p.size*2;ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill()}
+      ctx.restore()
+    }
+  }
+  clear(){this.particles=[]}
+}
+
+// ===== STORAGE =====
+const S={
+  _g(k){try{return JSON.parse(localStorage.getItem('nb_'+k))}catch{return null}},
+  _s(k,v){try{localStorage.setItem('nb_'+k,JSON.stringify(v))}catch{}},
+  getCoins(){return this._g('coins')||0},
+  addCoins(n){this._s('coins',this.getCoins()+n)},
+  spendCoins(n){const c=this.getCoins();if(c<n)return false;this._s('coins',c-n);return true},
+  getBest(mode){return this._g('best_'+mode)||0},
+  setBest(mode,s){if(s>this.getBest(mode))this._s('best_'+mode,s)},
+  getItems(){return this._g('items')||{bomb:1,shuffle:1,freeze:1,time:0}},
+  saveItems(items){this._s('items',items)},
+  useItem(t){const items=this.getItems();if((items[t]||0)<=0)return false;items[t]--;this.saveItems(items);return true},
+  addItem(t,n){const items=this.getItems();items[t]=(items[t]||0)+n;this.saveItems(items)},
+  getTheme(){return this._g('theme')||'classic'},
+  setTheme(t){this._s('theme',t)},
+  getUnlocked(){return this._g('themes')||['classic']},
+  unlockTheme(t){const u=this.getUnlocked();if(u.includes(t))return;u.push(t);this._s('themes',u)},
+  getAchievements(){return this._g('ach')||{}},
+  unlockAch(id){const a=this.getAchievements();if(a[id])return false;a[id]=Date.now();this._s('ach',a);return true},
+  getStats(){return this._g('stats')||{gamesPlayed:0,totalMoves:0,maxTile:0,maxCombo:0}},
+  saveStats(s){this._s('stats',s)},
+  getDaily(){
+    const today=new Date().toISOString().slice(0,10)
+    const d=this._g('daily')
+    if(!d||d.date!==today){
+      const seed=today.split('-').reduce((a,b)=>a+parseInt(b),0)
+      const challenges=[
+        {name:'合成綠色',target:4,type:'tile'},{name:'合成紫色',target:7,type:'tile'},
+        {name:'得到 1000 分',target:1000,type:'score'},{name:'得到 3000 分',target:3000,type:'score'},
+        {name:'3 連擊',target:3,type:'combo'},{name:'合成金色',target:8,type:'tile'},
+      ]
+      const ch={date:today,challenge:challenges[seed%challenges.length],completed:false}
+      this._s('daily',ch);return ch
+    }
+    return d
+  },
+  completeDaily(){const d=this.getDaily();d.completed=true;this._s('daily',d)},
+};
+
+// ===== ACHIEVEMENTS =====
+const ACHS=[
+  {id:'first_merge',name:'初次合併',desc:'第一次合併方塊',icon:'🧩',reward:10,check:s=>s.merges>=1},
+  {id:'tile_4',name:'青青草原',desc:'合成綠色方塊',icon:'🟢',reward:20,check:s=>s.maxTile>=4},
+  {id:'tile_5',name:'蔚藍深海',desc:'合成青色方塊',icon:'🔵',reward:30,check:s=>s.maxTile>=5},
+  {id:'tile_6',name:'藍寶石',desc:'合成藍色方塊',icon:'💎',reward:50,check:s=>s.maxTile>=6},
+  {id:'tile_7',name:'紫水晶',desc:'合成紫色方塊',icon:'🔮',reward:80,check:s=>s.maxTile>=7},
+  {id:'tile_8',name:'金光閃閃',desc:'合成金色方塊',icon:'⭐',reward:120,check:s=>s.maxTile>=8},
+  {id:'tile_9',name:'鑽石恆久',desc:'合成鑽石方塊',icon:'💎',reward:200,check:s=>s.maxTile>=9},
+  {id:'tile_10',name:'彩虹傳說',desc:'合成彩虹方塊',icon:'👑',reward:500,check:s=>s.maxTile>=10},
+  {id:'combo_3',name:'連擊新手',desc:'3 連擊',icon:'⚡',reward:30,check:s=>s.maxCombo>=3},
+  {id:'combo_5',name:'連擊高手',desc:'5 連擊',icon:'💥',reward:80,check:s=>s.maxCombo>=5},
+  {id:'combo_8',name:'連擊大師',desc:'8 連擊',icon:'🔥',reward:200,check:s=>s.maxCombo>=8},
+  {id:'games_10',name:'初心者',desc:'完成 10 局',icon:'🎮',reward:50,check:s=>s.gamesPlayed>=10},
+  {id:'games_50',name:'老玩家',desc:'完成 50 局',icon:'🎲',reward:150,check:s=>s.gamesPlayed>=50},
+  {id:'score_3k',name:'高分達人',desc:'單局 3000 分',icon:'👑',reward:100,check:s=>s.score>=3000},
+  {id:'score_10k',name:'萬分大佬',desc:'單局 10000 分',icon:'💰',reward:300,check:s=>s.score>=10000},
+  {id:'collector',name:'收藏家',desc:'解鎖全部主題',icon:'🎭',reward:500,check:s=>s.themesUnlocked>=4},
+];
+
+
+// ===== CANVAS SETUP =====
+const canvas = document.createElement('canvas')
+document.body.appendChild(canvas)
+const ctx = canvas.getContext('2d')
+const W = Math.min(window.innerWidth, 420), H = window.innerHeight, dpr = window.devicePixelRatio || 1
+canvas.width = W * dpr; canvas.height = H * dpr
+canvas.style.width = W + 'px'; canvas.style.height = H + 'px'
+ctx.scale(dpr, dpr)
+
+// ===== LAYOUT CONSTANTS (dynamic, fits screen) =====
+const COLS = 5, ROWS = 8
+const margin = 8
+const headerH = Math.min(85, Math.floor(H * 0.1))
+const previewH = Math.min(48, Math.floor(H * 0.06))
+const itemBarH = 48
+const backBtnH = 32
+const bottomPad = 10
+const boardTop = headerH + previewH + 2
+const boardW = W - margin * 2
+const cellGap = 3
+// Calculate cell size to fit BOTH width and height
+const cellW_from_width = Math.floor((boardW - cellGap * (COLS + 1)) / COLS)
+const availH = H - boardTop - itemBarH - backBtnH - bottomPad - 20
+const cellH_from_height = Math.floor((availH - cellGap * (ROWS + 1)) / ROWS)
+const cellSize = Math.max(20, Math.min(cellW_from_width, cellH_from_height))
+const cellW = cellSize
+const cellH = cellSize
+const boardH = cellH * ROWS + cellGap * (ROWS + 1)
+const boardX = margin
+
+// Helper
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+
+function getTheme(){return THEMES[S.getTheme()]||THEMES.classic}
+
+// ===== GAME STATE =====
+let state = 'menu' // menu | playing | shop | ach | lb | gameover | bomb_select
+let grid = new Grid(COLS, ROWS)
+let score = 0, moves = 0, maxCombo = 0, sessionCombo = 0, mergeCount = 0
+let currentPiece = 0, nextPiece = 0
+let timeLeft = 0, timerStart = 0, gameMode = 'classic'
+let freezeNext = false
+let particles = new ParticleSystem()
+let toasts = [] // {text, icon, alpha, y}
+let comboDisplay = null // {combo, alpha, scale}
+let dropAnim = null // {col, row, value, progress}
+let shakeAmount = 0
+let selectedBomb = null // {r, c}
+let boardOffset = {x:0, y:0} // for shake
+
+// Generate random piece (1, 2, or 4)
+function randPiece(){
+  return Math.random() < 0.55 ? 1 : 2
+}
+currentPiece = randPiece()
+nextPiece = randPiece()
+
+function startGame(mode) {
+  gameMode = mode
+  grid = new Grid(COLS, ROWS)
+  score = 0; moves = 0; maxCombo = 0; mergeCount = 0; freezeNext = false
+  currentPiece = randPiece(); nextPiece = randPiece()
+  state = 'playing'
+  if (mode === 'timed60') { timeLeft = 60; timerStart = Date.now() }
+  else if (mode === 'timed120') { timeLeft = 120; timerStart = Date.now() }
+  else { timeLeft = 0 }
+  particles.clear()
+  toasts = []; comboDisplay = null; dropAnim = null; shakeAmount = 0; selectedBomb = null
+}
+
+function doDrop(col) {
+  if (state !== 'playing') return
+  if (grid.isColFull(col)) return
+
+  // Save for undo
+  const prevGrid = grid.clone()
+  const prevScore = score
+
+  const row = grid.drop(col, currentPiece)
+  if (row === -1) return
+
+  moves++
+  sessionCombo = 0
+
+  // Process merges
+  const result = grid.processMerges()
+  if (result.chains > 0) {
+    sessionCombo = result.chains
+    if (sessionCombo > maxCombo) maxCombo = sessionCombo
+    score += result.score
+    mergeCount++
+
+    // Particles for each merge event
+    for (const evt of result.events) {
+      const cx = boardX + cellGap + evt.anchor.c * (cellW + cellGap) + cellW / 2
+      const cy = boardTop + cellGap + evt.anchor.r * (cellH + cellGap) + cellH / 2
+      particles.emit(cx, cy, null, evt.newValue)
+    }
+
+    // Combo display
+    if (sessionCombo >= 2) {
+      comboDisplay = { combo: sessionCombo, alpha: 1, scale: 1.5 }
+      particles.emitCombo(W / 2, boardTop + boardH / 2, sessionCombo)
+      if (sessionCombo >= 3) shakeAmount = sessionCombo * 2
+    }
+
+    // Coins per merge
+    const coinGain = Math.floor(result.score / 20)
+    if (coinGain > 0) {
+      S.addCoins(coinGain)
+      particles.emitCoins(W / 2, headerH, coinGain)
+    }
+  }
+
+  // Check daily challenge
+  if (gameMode === 'daily') {
+    const daily = S.getDaily()
+    if (!daily.completed) {
+      const ch = daily.challenge
+      let done = false
+      if (ch.type === 'tile' && grid.getMaxValue() >= ch.target) done = true
+      if (ch.type === 'score' && score >= ch.target) done = true
+      if (ch.type === 'combo' && maxCombo >= ch.target) done = true
+      if (done) { S.completeDaily(); addToast('📅', '每日挑戰完成！+100🪙'); S.addCoins(100) }
+    }
+  }
+
+  // Next piece
+  if (!freezeNext) {
+    currentPiece = nextPiece
+    nextPiece = randPiece()
+  } else {
+    freezeNext = false
+    addToast('❄️', '冰凍生效，不產生新方塊')
+  }
+
+  // Game over check
+  if (grid.isGameOver()) {
+    endGame()
+  }
+}
+
+function endGame() {
+  state = 'gameover'
+  const stats = S.getStats()
+  stats.gamesPlayed++
+  if (grid.getMaxValue() > stats.maxTile) stats.maxTile = grid.getMaxValue()
+  if (maxCombo > stats.maxCombo) stats.maxCombo = maxCombo
+  S.saveStats(stats)
+  S.setBest(gameMode, score)
+
+  // Check achievements
+  setTimeout(() => checkAch(), 500)
+}
+
+function checkAch() {
+  const stats = S.getStats()
+  const ctx = { maxTile: grid.getMaxValue(), maxCombo, score, gamesPlayed: stats.gamesPlayed, merges: mergeCount, themesUnlocked: S.getUnlocked().length }
+  for (const a of ACHS) {
+    if (!S.getAchievements()[a.id] && a.check(ctx)) {
+      S.unlockAch(a.id)
+      S.addCoins(a.reward)
+      addToast(a.icon, `${a.name} +${a.reward}🪙`)
+    }
+  }
+}
+
+function addToast(icon, text) {
+  toasts.push({ icon, text, alpha: 1, y: 0, timer: 120 })
+}
+
+function useItemAction(type) {
+  if (state !== 'playing') return
+  if (type === 'bomb') {
+    if (!S.useItem('bomb')) { addToast('❌', '沒有炸彈了'); return }
+    state = 'bomb_select'
+    return
+  }
+  if (type === 'shuffle') {
+    if (!S.useItem('shuffle')) { addToast('❌', '沒有洗牌了'); return }
+    grid.shuffle()
+    const result = grid.processMerges()
+    score += result.score
+    particles.emitItem(W/2, boardTop + boardH/2, 'shuffle')
+    addToast('🔀', '洗牌完成！')
+  }
+  if (type === 'freeze') {
+    if (!S.useItem('freeze')) { addToast('❌', '沒有冰凍了'); return }
+    freezeNext = true
+    particles.emitItem(W/2, boardTop + boardH/2, 'freeze')
+    addToast('❄️', '下一步不會出現新方塊')
+  }
+  if (type === 'time') {
+    if (!S.useItem('time')) { addToast('❌', '沒有加時了'); return }
+    if (gameMode.startsWith('timed')) { timeLeft += 15; addToast('⏳', '+15 秒！') }
+    else addToast('ℹ️', '僅限時模式可用')
+  }
+}
+
+function doBomb(r, c) {
+  const cleared = grid.bomb(r, c)
+  particles.emitItem(
+    boardX + cellGap + c * (cellW + cellGap) + cellW / 2,
+    boardTop + cellGap + r * (cellH + cellGap) + cellH / 2,
+    'bomb'
+  )
+  // Process any new merges from gravity
+  const result = grid.processMerges()
+  score += result.score
+  state = 'playing'
+  addToast('💣', `清除 ${cleared.length} 個方塊！`)
+  if (grid.isGameOver()) endGame()
+}
+
+// ===== SHOP DATA =====
+const SHOP = [
+  {type:'bomb',amt:1,price:80,label:'💣×1'},{type:'bomb',amt:3,price:200,label:'💣×3'},
+  {type:'shuffle',amt:1,price:60,label:'🔀×1'},{type:'shuffle',amt:3,price:150,label:'🔀×3'},
+  {type:'freeze',amt:1,price:40,label:'❄️×1'},{type:'freeze',amt:3,price:100,label:'❄️×3'},
+  {type:'time',amt:1,price:100,label:'⏳×1'},{type:'time',amt:3,price:250,label:'⏳×3'},
+]
+
+
+// ===== RENDER FUNCTIONS =====
+
+// Gradient background helper
+function drawBg(t) {
+  const grad = ctx.createLinearGradient(0, 0, W * 0.3, H)
+  grad.addColorStop(0, t.bg1)
+  grad.addColorStop(1, t.bg2)
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, W, H)
+}
+
+// Draw color tile — no numbers, just vibrant color blocks
+function drawTile(x, y, w, h, value, t, radius) {
+  const tc = TILE_COLORS[value] || {bg1:'#555',bg2:'#333'}
+  const r = radius || 6
+  const isSpecial = value >= 8
+
+  // Outer glow for special tiles (draw BEFORE the tile so it appears behind)
+  if (tc.glow) {
+    ctx.save()
+    ctx.shadowColor = tc.glow
+    ctx.shadowBlur = 18
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+    ctx.fillStyle = tc.glow
+    rr(x - 2, y - 2, w + 4, h + 4, r + 2); ctx.fill()
+    ctx.restore()
+  }
+
+  // Shadow + main gradient fill
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'
+  ctx.shadowBlur = 5
+  ctx.shadowOffsetY = 2
+  const grad = ctx.createLinearGradient(x, y, x, y + h)
+  grad.addColorStop(0, tc.bg1)
+  grad.addColorStop(1, tc.bg2 || tc.bg1)
+  ctx.fillStyle = grad
+  rr(x, y, w, h, r); ctx.fill()
+  ctx.restore()
+
+  // Shine highlight (top half)
+  ctx.save()
+  const shine = ctx.createLinearGradient(x, y, x, y + h * 0.45)
+  shine.addColorStop(0, 'rgba(255,255,255,0.4)')
+  shine.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = shine
+  rr(x, y, w, h * 0.45, r); ctx.fill()
+  ctx.restore()
+
+  // Special tile decorations
+  const cx = x + w / 2, cy = y + h / 2
+  if (value === 8) {
+    // ⭐ 金: draw a star shape
+    ctx.save()
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = `${Math.floor(w * 0.45)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('★', cx, cy)
+    ctx.restore()
+  } else if (value === 9) {
+    // 💎 鑽: draw diamond shape + sparkle
+    ctx.save()
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - h * 0.3)
+    ctx.lineTo(cx + w * 0.25, cy)
+    ctx.lineTo(cx, cy + h * 0.3)
+    ctx.lineTo(cx - w * 0.25, cy)
+    ctx.closePath()
+    ctx.fill()
+    // Inner shine
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - h * 0.15)
+    ctx.lineTo(cx + w * 0.12, cy)
+    ctx.lineTo(cx, cy + h * 0.15)
+    ctx.lineTo(cx - w * 0.12, cy)
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
+  } else if (value === 10) {
+    // 👑 虹: draw crown + rainbow shimmer
+    ctx.save()
+    // Rainbow overlay
+    const rainbow = ctx.createLinearGradient(x, y, x + w, y + h)
+    rainbow.addColorStop(0, 'rgba(255,100,100,0.25)')
+    rainbow.addColorStop(0.33, 'rgba(100,255,100,0.25)')
+    rainbow.addColorStop(0.66, 'rgba(100,100,255,0.25)')
+    rainbow.addColorStop(1, 'rgba(255,255,100,0.25)')
+    ctx.fillStyle = rainbow
+    rr(x, y, w, h, r); ctx.fill()
+    // Crown icon
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.font = `${Math.floor(w * 0.45)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('♛', cx, cy)
+    ctx.restore()
+  }
+}
+
+// Button with gradient + shadow
+function drawBtn(x, y, w, h, color, r, shadowAlpha) {
+  ctx.save()
+  ctx.shadowColor = `rgba(0,0,0,${shadowAlpha || 0.25})`
+  ctx.shadowBlur = 8
+  ctx.shadowOffsetY = 3
+  // Make a lighter version for gradient
+  ctx.fillStyle = color
+  rr(x, y, w, h, r || 10); ctx.fill()
+  // Shine
+  const shine = ctx.createLinearGradient(x, y, x, y + h * 0.5)
+  shine.addColorStop(0, 'rgba(255,255,255,0.2)')
+  shine.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = shine
+  rr(x, y, w, h * 0.5, r || 10); ctx.fill()
+  ctx.restore()
+}
+
+function drawAll() {
+  const t = getTheme()
+  // Shake
+  if (shakeAmount > 0) {
+    boardOffset.x = (Math.random() - 0.5) * shakeAmount
+    boardOffset.y = (Math.random() - 0.5) * shakeAmount
+    shakeAmount *= 0.9
+    if (shakeAmount < 0.3) { shakeAmount = 0; boardOffset.x = 0; boardOffset.y = 0 }
+  }
+
+  ctx.save()
+  ctx.translate(boardOffset.x, boardOffset.y)
+
+  // Background gradient
+  drawBg(t)
+
+  if (state === 'menu') drawMenu(t)
+  else if (state === 'shop') drawShop(t)
+  else if (state === 'ach') drawAch(t)
+  else if (state === 'lb') drawLB(t)
+  else if (state === 'gameover') { drawGameScreen(t); drawGameOver(t); }
+  else if (state === 'bomb_select') { drawGameScreen(t); drawBombOverlay(t) }
+  else drawGameScreen(t)
+
+  // Particles always on top
+  particles.update()
+  particles.draw(ctx)
+
+  // Toasts
+  drawToasts(t)
+
+  // Combo
+  if (comboDisplay) {
+    comboDisplay.alpha -= 0.012
+    comboDisplay.scale += (1 - comboDisplay.scale) * 0.1
+    if (comboDisplay.alpha <= 0) comboDisplay = null
+    else {
+      ctx.save()
+      ctx.globalAlpha = comboDisplay.alpha
+      ctx.fillStyle = t.accent || '#ffd700'
+      ctx.font = `bold ${40 * comboDisplay.scale}px Arial`
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 20
+      ctx.fillText(`${comboDisplay.combo}x COMBO!`, W / 2, boardTop + boardH / 2)
+      ctx.restore()
+    }
+  }
+
+  ctx.restore()
+  requestAnimationFrame(drawAll)
+}
+
+function drawGameScreen(t) {
+  // Header with semi-transparent bar
+  ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(0, 0, W, headerH - 5)
+
+  ctx.fillStyle = t.header; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'
+  ctx.fillText('💥 數字大爆炸', margin, 8)
+
+  ctx.font = 'bold 14px Arial'; ctx.textAlign = 'right'
+  ctx.fillStyle = t.accent || '#ffd700'
+  ctx.fillText(`🪙 ${S.getCoins()}`, W - margin, 8)
+
+  // Score boxes with card style
+  const sw = 72, sh = 36
+  drawScoreBox(W - margin - sw * 2 - 8, 30, sw, sh, '分數', score, t)
+  drawScoreBox(W - margin - sw, 30, sw, sh, '最高', S.getBest(gameMode), t)
+
+  // Timer for timed mode
+  if (gameMode.startsWith('timed')) {
+    const elapsed = (Date.now() - timerStart) / 1000
+    const remaining = Math.max(0, timeLeft - elapsed)
+    ctx.fillStyle = remaining < 10 ? '#ff4444' : t.header
+    ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center'
+    ctx.fillText(`⏱ ${Math.ceil(remaining)}s`, W / 2, 72)
+    if (remaining <= 0 && state === 'playing') endGame()
+  }
+
+  // Preview area
+  ctx.fillStyle = t.textDim; ctx.font = '12px Arial'; ctx.textAlign = 'left'
+  ctx.fillText('當前', margin + 8, headerH + 5)
+  ctx.fillText('下一', margin + cellW + 40, headerH + 5)
+  drawPreviewTile(margin + 15, headerH + 22, currentPiece, t)
+  drawPreviewTile(margin + cellW + 48, headerH + 22, nextPiece, t)
+
+  // Board background with rounded rect + blur effect
+  ctx.fillStyle = t.board
+  rr(boardX, boardTop, boardW, boardH, 12); ctx.fill()
+  // Board border
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1
+  rr(boardX, boardTop, boardW, boardH, 12); ctx.stroke()
+
+  // Column highlight on hover
+  if (typeof lastTouchCol === 'number' && lastTouchCol >= 0 && state === 'playing') {
+    const cx = boardX + cellGap + lastTouchCol * (cellW + cellGap)
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'
+    rr(cx, boardTop + cellGap, cellW, boardH - cellGap * 2, 6); ctx.fill()
+  }
+
+  // Cells — use new drawTile for filled, simple for empty
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = boardX + cellGap + c * (cellW + cellGap)
+      const y = boardTop + cellGap + r * (cellH + cellGap)
+      const v = grid.cells[r][c]
+
+      // Empty cell
+      ctx.fillStyle = t.empty
+      rr(x, y, cellW, cellH, 5); ctx.fill()
+
+      if (v > 0) {
+        drawTile(x + 1, y + 1, cellW - 2, cellH - 2, v, t, 5)
+      }
+    }
+  }
+
+  // Item bar
+  const items = S.getItems()
+  const itemTypes = [
+    { key: 'bomb', icon: '💣', label: items.bomb || 0 },
+    { key: 'shuffle', icon: '🔀', label: items.shuffle || 0 },
+    { key: 'freeze', icon: '❄️', label: items.freeze || 0 },
+    { key: 'time', icon: '⏳', label: items.time || 0 },
+  ]
+  const ibY = boardTop + boardH + 5
+  const ibW = (boardW - 12) / 4
+  const ibH = Math.min(42, itemBarH - 6)
+  for (let i = 0; i < itemTypes.length; i++) {
+    const ix = boardX + i * (ibW + 4)
+    drawBtn(ix, ibY, ibW, ibH, t.btnS, 8)
+    ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = t.header
+    ctx.fillText(itemTypes[i].icon, ix + ibW / 2, ibY + ibH * 0.35)
+    ctx.font = 'bold 10px Arial'
+    ctx.fillStyle = t.text || '#fff'
+    ctx.fillText(`×${itemTypes[i].label}`, ix + ibW / 2, ibY + ibH * 0.75)
+  }
+
+  // Back button
+  const bbY = ibY + ibH + 4
+  drawBtn(margin, bbY, 65, backBtnH, t.btnS, 8)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 菜單', margin + 32, bbY + backBtnH / 2)
+}
+
+function drawPreviewTile(x, y, value, t) {
+  const sz = 30
+  drawTile(x, y, sz, sz, value, t, 6)
+}
+
+function drawScoreBox(x, y, w, h, label, val, t) {
+  drawBtn(x, y, w, h, 'rgba(0,0,0,0.2)', 8)
+  ctx.fillStyle = t.textDim || 'rgba(255,255,255,0.5)'; ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText(label, x + w / 2, y + 4)
+  ctx.fillStyle = t.header; ctx.font = 'bold 15px Arial'; ctx.textBaseline = 'bottom'
+  ctx.fillText(String(val), x + w / 2, y + h - 3)
+}
+
+function drawBombOverlay(t) {
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = t.header; ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('💣 點擊目標位置炸掉 3×3', W / 2, boardTop - 25)
+
+  // Highlight cells on touch
+  if (typeof lastTouchCell === 'object' && lastTouchCell) {
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = lastTouchCell.r + dr, nc = lastTouchCell.c + dc
+        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+          const x = boardX + cellGap + nc * (cellW + cellGap)
+          const y = boardTop + cellGap + nr * (cellH + cellGap)
+          ctx.fillStyle = 'rgba(255,68,68,0.4)'
+          rr(x, y, cellW, cellH, 4); ctx.fill()
+        }
+      }
+    }
+  }
+}
+
+function drawGameOver(t) {
+  ctx.fillStyle = t.overlay; ctx.fillRect(0, 0, W, H)
+  const cy = H / 2 - 90
+
+  // Card background
+  drawBtn(25, cy - 20, W - 50, 220, 'rgba(0,0,0,0.3)', 20, 0.3)
+
+  ctx.fillStyle = t.header; ctx.font = 'bold 28px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('💥 遊戲結束', W / 2, cy + 10)
+
+  ctx.fillStyle = t.accent || '#ffd700'; ctx.font = 'bold 48px Arial'
+  ctx.fillText(String(score), W / 2, cy + 60)
+  ctx.fillStyle = t.textDim; ctx.font = '13px Arial'
+  ctx.fillText(`最大: ${levelName(grid.getMaxValue())} | ${moves} 步 | 最高 ${maxCombo}x 連擊`, W / 2, cy + 95)
+
+  const coinGain = Math.floor(score / 20)
+  ctx.fillStyle = t.accent || '#ffd700'; ctx.font = 'bold 18px Arial'
+  ctx.fillText(`🪙 +${coinGain}`, W / 2, cy + 125)
+
+  // Buttons
+  const bw = 125, bh = 44
+  drawBtn(W/2 - bw - 8, cy + 150, bw, bh, t.btnP, 12)
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'
+  ctx.fillText('再來一局', W/2 - bw/2 - 8, cy + 172)
+
+  drawBtn(W/2 + 8, cy + 150, bw, bh, t.btnS, 12)
+  ctx.fillStyle = t.text || '#fff'
+  ctx.fillText('回菜單', W/2 + bw/2 + 8, cy + 172)
+}
+
+function drawMenu(t) {
+  // Logo with glow effect
+  ctx.save()
+  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 20
+  ctx.fillStyle = t.header; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('💥 數字大爆炸', W / 2, 35)
+  ctx.restore()
+
+  ctx.fillStyle = t.textDim; ctx.font = '14px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('Drop & Merge，連鎖爆炸！', W / 2, 80)
+
+  // Coins with accent color
+  ctx.fillStyle = t.accent || '#ffd700'; ctx.font = 'bold 16px Arial'; ctx.fillText(`🪙 ${S.getCoins()}`, W / 2, 105)
+
+  // Mode buttons — gradient pill buttons
+  const modes = [
+    { id: 'classic', label: '🎮 經典模式', sub: '無限挑戰', color: '#ff6b6b' },
+    { id: 'timed60', label: '⏱️ 限時 60秒', sub: '快節奏', color: '#feca57' },
+    { id: 'timed120', label: '⏱️ 限時 120秒', sub: '衝高分', color: '#48dbfb' },
+    { id: 'daily', label: '📅 每日挑戰', sub: S.getDaily().challenge.name, color: '#ff9ff3' },
+  ]
+  const bw = W - 50, bh = 58, startY = 140
+  for (let i = 0; i < modes.length; i++) {
+    const y = startY + i * (bh + 8)
+    drawBtn(25, y, bw, bh, modes[i].color, 14)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 17px Arial'; ctx.textAlign = 'left'
+    ctx.fillText(modes[i].label, 48, y + 22)
+    ctx.font = '12px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.75)'
+    ctx.fillText(modes[i].sub, 48, y + 42)
+  }
+
+  // Bottom buttons — glass style
+  const bbY = startY + modes.length * (bh + 8) + 15
+  const bCols = 4, bbW = (W - 50) / bCols, bbH = 44
+  const bbs = [
+    { id: 'shop', label: '🛒 商店' },
+    { id: 'ach', label: '🏅 成就' },
+    { id: 'lb', label: '📊 排行' },
+    { id: 'theme', label: '🎭 主題' },
+  ]
+  for (let i = 0; i < bbs.length; i++) {
+    const x = 15 + i * (bbW + 6)
+    drawBtn(x, bbY, bbW, bbH, t.btnS, 10)
+    ctx.fillStyle = t.header; ctx.font = '13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(bbs[i].label, x + bbW / 2, bbY + bbH / 2)
+  }
+
+  // Best scores
+  ctx.fillStyle = t.textDim; ctx.font = '12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText(`經典: ${S.getBest('classic')} | 60s: ${S.getBest('timed60')} | 120s: ${S.getBest('timed120')}`, W / 2, bbY + 55)
+}
+
+function drawShop(t) {
+  ctx.fillStyle = t.header; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('🛒 商店', W / 2, 15)
+  ctx.fillStyle = t.accent || '#ffd700'; ctx.font = 'bold 15px Arial'
+  ctx.fillText(`🪙 ${S.getCoins()}`, W / 2, 45)
+
+  const startY = 70
+  ctx.fillStyle = t.header; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'
+  ctx.fillText('— 道具 —', 20, startY)
+
+  const bw = (W - 50) / 2, bh = 44
+  for (let i = 0; i < SHOP.length; i++) {
+    const col = i % 2, row = Math.floor(i / 2)
+    const x = 15 + col * (bw + 10), y = startY + 22 + row * (bh + 6)
+    drawBtn(x, y, bw, bh, t.btnP, 10)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(`${SHOP[i].label}  ${SHOP[i].price}🪙`, x + bw / 2, y + bh / 2)
+  }
+
+  // Themes
+  const themeY = startY + 22 + Math.ceil(SHOP.length / 2) * (bh + 6) + 15
+  ctx.fillStyle = t.header; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'
+  ctx.fillText('— 主題皮膚 —', 20, themeY)
+
+  const unlocked = S.getUnlocked()
+  const themeKeys = Object.keys(THEMES)
+  for (let i = 0; i < themeKeys.length; i++) {
+    const tk = themeKeys[i], theme = THEMES[tk]
+    const y = themeY + 22 + i * 50
+    const owned = unlocked.includes(tk)
+    const active = S.getTheme() === tk
+
+    const bgColor = active ? t.btnP : t.btnS
+    drawBtn(15, y, W - 30, 44, bgColor, 10)
+
+    ctx.fillStyle = t.header; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    ctx.fillText(`${theme.icon} ${theme.name}`, 32, y + 22)
+
+    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'right'
+    if (active) ctx.fillText('✅ 使用中', W - 30, y + 22)
+    else if (owned) ctx.fillText('已擁有', W - 30, y + 22)
+    else { ctx.fillStyle = t.accent || '#ffd700'; ctx.fillText(`${theme.price}🪙`, W - 30, y + 22) }
+  }
+
+  // Back
+  drawBtn(15, H - 55, 70, 38, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 返回', 50, H - 36)
+}
+
+function drawAch(t) {
+  ctx.fillStyle = t.header; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('🏅 成就', W / 2, 15)
+
+  const unlocked = S.getAchievements()
+  for (let i = 0; i < ACHS.length; i++) {
+    const a = ACHS[i], done = !!unlocked[a.id]
+    const y = 48 + i * 38
+    // Card background
+    drawBtn(15, y, W - 30, 34, done ? 'rgba(100,200,100,0.25)' : 'rgba(0,0,0,0.15)', 8, 0.15)
+    ctx.fillStyle = t.header; ctx.font = '14px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    ctx.fillText(`${done ? a.icon : '🔒'} ${a.name} - ${a.desc}`, 28, y + 18)
+    if (done) { ctx.fillStyle = t.accent || '#ffd700'; ctx.textAlign = 'right'; ctx.fillText(`+${a.reward}🪙`, W - 28, y + 18) }
+  }
+
+  drawBtn(15, H - 55, 70, 38, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 返回', 50, H - 36)
+}
+
+function drawLB(t) {
+  ctx.fillStyle = t.header; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('📊 排行榜', W / 2, 15)
+
+  const modes = [
+    { id: 'classic', name: '🎮 經典', color: '#ff6b6b' },
+    { id: 'timed60', name: '⏱️ 60秒', color: '#feca57' },
+    { id: 'timed120', name: '⏱️ 120秒', color: '#48dbfb' },
+  ]
+  for (let i = 0; i < modes.length; i++) {
+    const y = 55 + i * 65
+    drawBtn(20, y, W - 40, 55, 'rgba(0,0,0,0.15)', 12, 0.15)
+    ctx.fillStyle = modes[i].color; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    ctx.fillText(modes[i].name, 38, y + 27)
+    ctx.fillStyle = t.header; ctx.font = 'bold 26px Arial'; ctx.textAlign = 'right'
+    ctx.fillText(String(S.getBest(modes[i].id)), W - 38, y + 27)
+  }
+
+  // Stats
+  const stats = S.getStats()
+  const sy = 260
+  ctx.fillStyle = t.header; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('— 統計 —', W / 2, sy)
+  const statLines = [
+    `🎮 總場次: ${stats.gamesPlayed || 0}`,
+    `🏆 最高色階: ${levelName(stats.maxTile || 0)}`,
+    `⚡ 最高連擊: ${stats.maxCombo || 0}`,
+  ]
+  for (let i = 0; i < statLines.length; i++) {
+    ctx.fillStyle = t.textDim; ctx.font = '14px Arial'; ctx.textAlign = 'center'
+    ctx.fillText(statLines[i], W / 2, sy + 28 + i * 24)
+  }
+
+  drawBtn(15, H - 55, 70, 38, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 返回', 50, H - 36)
+}
+
+function drawToasts(t) {
+  for (let i = toasts.length - 1; i >= 0; i--) {
+    const toast = toasts[i]
+    toast.timer--
+    if (toast.timer < 30) toast.alpha -= 0.033
+    toast.y += 0.3
+    if (toast.alpha <= 0) { toasts.splice(i, 1); continue }
+
+    ctx.save()
+    ctx.globalAlpha = Math.max(0, toast.alpha)
+    const ty = 8 + (toasts.length - 1 - i) * 32 - toast.y
+    // Glass-style toast
+    ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2
+    ctx.fillStyle = 'rgba(20,20,40,0.82)'
+    rr(W / 2 - 125, ty, 250, 30, 15); ctx.fill()
+    // Shine on toast
+    const shine = ctx.createLinearGradient(W/2-125, ty, W/2-125, ty+15)
+    shine.addColorStop(0, 'rgba(255,255,255,0.1)')
+    shine.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = shine
+    rr(W/2-125, ty, 250, 15, 15); ctx.fill()
+
+    ctx.shadowBlur = 0
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(`${toast.icon} ${toast.text}`, W / 2, ty + 15)
+    ctx.restore()
+  }
+}
+
+
+// ===== INPUT =====
+let lastTouchCol = -1
+let lastTouchCell = null
+let touchStartY = 0
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault()
+  const touch = e.touches[0]
+  touchStartY = touch.clientY
+  handleTouchMove(touch.clientX, touch.clientY)
+}, { passive: false })
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault()
+  const touch = e.touches[0]
+  handleTouchMove(touch.clientX, touch.clientY)
+}, { passive: false })
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault()
+  const touch = e.changedTouches[0]
+  const dy = Math.abs(touch.clientY - touchStartY)
+  if (dy > 30) { lastTouchCol = -1; lastTouchCell = null; return } // was a swipe
+  handleClick(touch.clientX, touch.clientY)
+  lastTouchCol = -1; lastTouchCell = null
+}, { passive: false })
+
+function handleTouchMove(x, y) {
+  if (state === 'playing' || state === 'bomb_select') {
+    // Find column
+    const col = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+    lastTouchCol = (col >= 0 && col < COLS) ? col : -1
+    // Find cell for bomb
+    const row = Math.floor((y - boardTop - cellGap) / (cellH + cellGap))
+    lastTouchCell = (row >= 0 && row < ROWS && col >= 0 && col < COLS) ? { r: row, c: col } : null
+  }
+}
+
+function handleClick(x, y) {
+  if (state === 'menu') handleMenuClick(x, y)
+  else if (state === 'playing') handlePlayClick(x, y)
+  else if (state === 'bomb_select') handleBombClick(x, y)
+  else if (state === 'gameover') handleGameOverClick(x, y)
+  else if (state === 'shop') handleShopClick(x, y)
+  else if (state === 'ach' || state === 'lb') handleBackClick(x, y)
+}
+
+function handleMenuClick(x, y) {
+  const bw = W - 50, bh = 58, startY = 140
+  const modes = ['classic', 'timed60', 'timed120', 'daily']
+  for (let i = 0; i < 4; i++) {
+    const by = startY + i * (bh + 8)
+    if (x >= 25 && x <= 25 + bw && y >= by && y <= by + bh) {
+      startGame(modes[i]); return
+    }
+  }
+  // Bottom buttons
+  const bbY = startY + 4 * (bh + 8) + 15
+  const bCols = 4, bbW = (W - 50) / bCols, bbH = 44
+  const actions = ['shop', 'ach', 'lb', 'theme']
+  for (let i = 0; i < 4; i++) {
+    const bx = 15 + i * (bbW + 6)
+    if (x >= bx && x <= bx + bbW && y >= bbY && y <= bbY + bbH) {
+      if (actions[i] === 'theme') state = 'shop'
+      else state = actions[i]
+      return
+    }
+  }
+}
+
+function handlePlayClick(x, y) {
+  // Item bar
+  const ibY = boardTop + boardH + 5
+  const ibW = (boardW - 12) / 4
+  const ibH = Math.min(42, itemBarH - 6)
+  const itemKeys = ['bomb', 'shuffle', 'freeze', 'time']
+  for (let i = 0; i < 4; i++) {
+    const ix = boardX + i * (ibW + 4)
+    if (x >= ix && x <= ix + ibW && y >= ibY && y <= ibY + ibH) {
+      useItemAction(itemKeys[i]); return
+    }
+  }
+
+  // Back button
+  const bbY = ibY + ibH + 4
+  if (x >= margin && x <= margin + 65 && y >= bbY && y <= bbY + backBtnH) {
+    state = 'menu'; return
+  }
+
+  // Board column
+  const col = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+  if (col >= 0 && col < COLS && y >= boardTop && y <= boardTop + boardH) {
+    doDrop(col)
+  }
+}
+
+function handleBombClick(x, y) {
+  if (y >= boardTop && y <= boardTop + boardH) {
+    const col = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+    const row = Math.floor((y - boardTop - cellGap) / (cellH + cellGap))
+    if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+      doBomb(row, col)
+    }
+  }
+}
+
+function handleGameOverClick(x, y) {
+  const cy = H / 2 - 90
+  const bw = 125, bh = 44
+  // 再來一局
+  if (x >= W/2 - bw - 8 && x <= W/2 - 8 && y >= cy + 150 && y <= cy + 194) {
+    startGame(gameMode); return
+  }
+  // 回菜單
+  if (x >= W/2 + 8 && x <= W/2 + 8 + bw && y >= cy + 150 && y <= cy + 194) {
+    state = 'menu'; return
+  }
+}
+
+function handleShopClick(x, y) {
+  // Back
+  if (x >= 15 && x <= 85 && y >= H - 55 && y <= H - 17) { state = 'menu'; return }
+
+  // Item purchase
+  const bw = (W - 50) / 2, bh = 44, startY = 70
+  for (let i = 0; i < SHOP.length; i++) {
+    const col = i % 2, row = Math.floor(i / 2)
+    const sx = 15 + col * (bw + 10), sy = startY + 22 + row * (bh + 6)
+    if (x >= sx && x <= sx + bw && y >= sy && y <= sy + bh) {
+      const item = SHOP[i]
+      if (S.spendCoins(item.price)) {
+        S.addItem(item.type, item.amt)
+        addToast('✅', `購買 ${item.label}`)
+      } else {
+        addToast('❌', '金幣不足')
+      }
+      return
+    }
+  }
+
+  // Theme purchase/switch
+  const themeY = startY + 22 + Math.ceil(SHOP.length / 2) * (bh + 6) + 15
+  const unlocked = S.getUnlocked()
+  const themeKeys = Object.keys(THEMES)
+  for (let i = 0; i < themeKeys.length; i++) {
+    const tk = themeKeys[i], theme = THEMES[tk]
+    const ty = themeY + 22 + i * 50
+    if (x >= 15 && x <= W - 15 && y >= ty && y <= ty + 44) {
+      if (unlocked.includes(tk)) {
+        S.setTheme(tk)
+        addToast(theme.icon, `切換到 ${theme.name}`)
+      } else {
+        if (S.spendCoins(theme.price)) {
+          S.unlockTheme(tk)
+          S.setTheme(tk)
+          addToast(theme.icon, `解鎖 ${theme.name}！`)
+        } else {
+          addToast('❌', '金幣不足')
+        }
+      }
+      return
+    }
+  }
+}
+
+function handleBackClick(x, y) {
+  if (x >= 15 && x <= 85 && y >= H - 55 && y <= H - 17) state = 'menu'
+}
+
+// Keyboard (desktop testing)
+document.addEventListener('keydown', e => {
+  if (state === 'playing') {
+    if (e.key >= '1' && e.key <= '5') doDrop(parseInt(e.key) - 1)
+    if (e.key === 'b') useItemAction('bomb')
+    if (e.key === 's') useItemAction('shuffle')
+    if (e.key === 'f') useItemAction('freeze')
+    if (e.key === 't') useItemAction('time')
+  }
+  if (e.key === 'Escape') state = 'menu'
+})
+
+// ===== START =====
+drawAll()
+</script>
+</body>
+</html>

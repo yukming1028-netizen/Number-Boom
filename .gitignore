@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.pyc
+_tmp_*
+ss_*.png
+screenshot*.py
+ss_*.py
+play/

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>數字大爆炸</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block}
+</style>
+</head>
+<body>
+<script>
+// ===== GRID CORE (5×5, expandable) =====
+class Grid {
+  constructor(cols = 5, rows = 8) {
+    this.cols = cols
+    this.rows = rows
+    this.cells = []
+    this.reset()
+  }
+
+  reset() {
+    this.cells = Array.from({ length: this.rows }, () => Array(this.cols).fill(0))
+  }
+
+  clone() {
+    const g = new Grid(this.cols, this.rows)
+    g.cells = this.cells.map(r => [...r])
+    return g
+  }
+
+  // ===== 基礎操作 =====
+
+  /** 投放方塊到指定列，返回落地的行號（-1=滿了） */
+  drop(col, value) {
+    if (col < 0 || col >= this.cols) return -1
+    if (this.cells[0][col] !== 0) return -1
+
+    let targetRow = -1
+    for (let r = this.rows - 1; r >= 0; r--) {
+      if (this.cells[r][col] === 0) { targetRow = r; break }
+    }
+    if (targetRow === -1) return -1
+
+    this.cells[targetRow][col] = value
+    return targetRow
+  }
+
+  /** 重力 — 所有方塊往下落 */
+  applyGravity() {
+    const moved = []
+    for (let c = 0; c < this.cols; c++) {
+      const vals = []
+      for (let r = 0; r < this.rows; r++) {
+        if (this.cells[r][c] !== 0) vals.push(this.cells[r][c])
+      }
+      for (let r = this.rows - 1; r >= 0; r--) {
+        const idx = vals.length - (this.rows - r)
+        const newVal = idx >= 0 ? vals[idx] : 0
+        if (newVal !== this.cells[r][c]) moved.push({ r, c })
+        this.cells[r][c] = newVal
+      }
+    }
+    return moved
+  }
+
+  // ===== 合併系統 =====
+
+  /** BFS 找相鄰同值群組，返回大小≥3的群組 */
+  findGroups() {
+    const visited = Array.from({ length: this.rows }, () => Array(this.cols).fill(false))
+    const groups = []
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.cells[r][c] === 0 || visited[r][c]) continue
+
+        const value = this.cells[r][c]
+        const group = []
+        const queue = [{ r, c }]
+        visited[r][c] = true
+
+        while (queue.length > 0) {
+          const cur = queue.shift()
+          group.push(cur)
+
+          for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nr = cur.r + dr, nc = cur.c + dc
+            if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols
+              && !visited[nr][nc] && this.cells[nr][nc] === value) {
+              visited[nr][nc] = true
+              queue.push({ r: nr, c: nc })
+            }
+          }
+        }
+
+        if (group.length >= 3) {
+          groups.push({ cells: group, value })
+        }
+      }
+    }
+
+    return groups
+  }
+
+  /**
+   * 處理合併 — 返回 { score, chains, events }
+   * 自動處理連鎖反應直到沒有新群組
+   */
+  processMerges() {
+    let totalScore = 0
+    let chains = 0
+    const events = []
+
+    while (true) {
+      const groups = this.findGroups()
+      if (groups.length === 0) break
+
+      chains++
+      const cleared = [] // 所有被清除的格子（用於粒子特效）
+
+      for (const group of groups) {
+        const newValue = group.value + 1
+
+        // 找錨點：最底部、然後最左邊
+        let anchor = group.cells[0]
+        for (const cell of group.cells) {
+          if (cell.r > anchor.r || (cell.r === anchor.r && cell.c < anchor.c)) {
+            anchor = cell
+          }
+        }
+
+        // 記錄被清除的位置
+        for (const { r, c } of group.cells) {
+          cleared.push({ r, c, value: group.value })
+          this.cells[r][c] = 0
+        }
+
+        // 放置合併後的方塊
+        this.cells[anchor.r][anchor.c] = newValue
+
+        // 計分: 新值 × 消除數量 × 連鎖倍率
+        const chainMultiplier = 1 + (chains - 1) * 0.5
+        const groupScore = Math.floor(newValue * newValue * group.cells.length * chainMultiplier)
+        totalScore += groupScore
+
+        events.push({
+          anchor: { ...anchor },
+          newValue,
+          cleared: [...cleared],
+          chain: chains,
+          score: groupScore,
+          groupSize: group.cells.length,
+        })
+      }
+
+      this.applyGravity()
+    }
+
+    return { score: totalScore, chains, events }
+  }
+
+  // ===== 遊戲狀態 =====
+
+  /** 某列是否已滿 */
+  isColFull(c) {
+    return this.cells[0][c] !== 0
+  }
+
+  /** 是否 Game Over（所有列都滿了） */
+  isGameOver() {
+    for (let c = 0; c < this.cols; c++) {
+      if (this.cells[0][c] === 0) return false
+    }
+    return true
+  }
+
+  /** 棋盤上的最大值 */
+  getMaxValue() {
+    let max = 0
+    for (const row of this.cells) for (const v of row) if (v > max) max = v
+    return max
+  }
+
+  /** 非空方塊數量 */
+  getCount() {
+    let n = 0
+    for (const row of this.cells) for (const v of row) if (v > 0) n++
+    return n
+  }
+
+  // ===== 道具效果 =====
+
+  /** 炸彈 — 清除以 (r,c) 為中心的 3x3 區域 */
+  bomb(r, c) {
+    const cleared = []
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc
+        if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols && this.cells[nr][nc] > 0) {
+          cleared.push({ r: nr, c: nc, value: this.cells[nr][nc] })
+          this.cells[nr][nc] = 0
+        }
+      }
+    }
+    this.applyGravity()
+    return cleared
+  }
+
+  /** 洗牌 — 隨機打亂所有方塊位置 */
+  shuffle() {
+    const values = []
+    const positions = []
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.cells[r][c] > 0) {
+          values.push(this.cells[r][c])
+          positions.push({ r, c })
+        }
+      }
+    }
+    // Fisher-Yates
+    for (let i = values.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [values[i], values[j]] = [values[j], values[i]]
+    }
+    // 先清空再放回
+    for (const p of positions) this.cells[p.r][p.c] = 0
+    for (let i = 0; i < positions.length; i++) {
+      this.cells[positions[i].r][positions[i].c] = values[i]
+    }
+    this.applyGravity()
+  }
+  /** 錘子 — 消除選中的一格 */
+  hammer(r, c) {
+    if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return []
+    if (this.cells[r][c] === 0) return []
+    const v = this.cells[r][c]
+    this.cells[r][c] = 0
+    this.applyGravity()
+    return [{ r, c, value: v }]
+  }
+
+  /** 閃電 — 消除所有與選中格相同值的方塊 */
+  lightning(r, c) {
+    if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return []
+    const target = this.cells[r][c]
+    if (target === 0) return []
+    const cleared = []
+    for (let ri = 0; ri < this.rows; ri++) {
+      for (let ci = 0; ci < this.cols; ci++) {
+        if (this.cells[ri][ci] === target) {
+          cleared.push({ r: ri, c: ci, value: target })
+          this.cells[ri][ci] = 0
+        }
+      }
+    }
+    this.applyGravity()
+    return cleared
+  }
+
+  /** 加一列 */
+  expandCol() {
+    this.cols++
+    for (let r = 0; r < this.rows; r++) this.cells[r].push(0)
+  }
+
+  /** 加一行（頂部） */
+  expandRow() {
+    this.rows++
+    this.cells.unshift(Array(this.cols).fill(0))
+  }
+
+}
+
+// ===== TILE COLORS =====
+const TILE_COLORS = [
+  null,
+  {name:'紅',emoji:'🔴',bg1:'#FF6B6B',bg2:'#D63031'},
+  {name:'橙',emoji:'🟠',bg1:'#FFA502',bg2:'#E67E22'},
+  {name:'黃',emoji:'🟡',bg1:'#FFD32A',bg2:'#F9CA24'},
+  {name:'綠',emoji:'🟢',bg1:'#2ED573',bg2:'#009432'},
+  {name:'青',emoji:'🔵',bg1:'#18DCFF',bg2:'#1289A7'},
+  {name:'藍',emoji:'💎',bg1:'#7158E2',bg2:'#3D3D8E'},
+  {name:'紫',emoji:'🔮',bg1:'#C56CF0',bg2:'#6F1E51'},
+  {name:'金',emoji:'⭐',bg1:'#FFD700',bg2:'#DAA520',glow:'#FFD700'},
+  {name:'鑽',emoji:'💠',bg1:'#DFE6E9',bg2:'#636E72',glow:'#FFFFFF'},
+  {name:'虹',emoji:'👑',bg1:'#FF6B6B',bg2:'#6F1E51',glow:'#FFD700'},
+]
+
+function levelName(v) {
+  if (v > 0 && v < TILE_COLORS.length) return TILE_COLORS[v].name
+  return 'Lv.' + v
+}
+
+// ===== THEMES (1 free + unlockable by rainbow count) =====
+const THEMES = [
+  {id:'classic',name:'經典',icon:'🎨',rainbow:0,
+   bg1:'#667eea',bg2:'#764ba2',header:'#fff',board:'rgba(0,0,0,0.25)',empty:'rgba(255,255,255,0.12)',
+   btnP:'#ff6b6b',btnS:'rgba(255,255,255,0.18)',overlay:'rgba(30,20,60,0.88)',
+   text:'#fff',textDim:'rgba(255,255,255,0.6)',accent:'#ffd700'},
+  {id:'ocean',name:'海洋',icon:'🌊',rainbow:1,
+   bg1:'#0F2027',bg2:'#2C5364',header:'#e0f7fa',board:'rgba(0,0,0,0.3)',empty:'rgba(255,255,255,0.08)',
+   btnP:'#00bcd4',btnS:'rgba(0,188,212,0.15)',overlay:'rgba(15,32,39,0.9)',
+   text:'#e0f7fa',textDim:'rgba(224,247,250,0.5)',accent:'#00e5ff'},
+  {id:'cyber',name:'賽博',icon:'👾',rainbow:2,
+   bg1:'#0f0c29',bg2:'#302b63',header:'#00ffcc',board:'rgba(0,0,0,0.4)',empty:'rgba(255,255,255,0.06)',
+   btnP:'#e94560',btnS:'rgba(0,255,204,0.12)',overlay:'rgba(10,10,26,0.9)',
+   text:'#00ffcc',textDim:'rgba(0,255,204,0.5)',accent:'#e94560'},
+  {id:'sunset',name:'日落',icon:'🌅',rainbow:3,
+   bg1:'#f12711',bg2:'#f5af19',header:'#fff',board:'rgba(0,0,0,0.2)',empty:'rgba(255,255,255,0.15)',
+   btnP:'#ff6b35',btnS:'rgba(255,255,255,0.2)',overlay:'rgba(241,39,17,0.88)',
+   text:'#fff',textDim:'rgba(255,255,255,0.6)',accent:'#fff176'},
+  {id:'forest',name:'森林',icon:'🌲',rainbow:4,
+   bg1:'#134E5E',bg2:'#71B280',header:'#e8f5e9',board:'rgba(0,0,0,0.25)',empty:'rgba(255,255,255,0.1)',
+   btnP:'#4caf50',btnS:'rgba(76,175,80,0.15)',overlay:'rgba(19,78,94,0.9)',
+   text:'#e8f5e9',textDim:'rgba(232,245,233,0.5)',accent:'#a5d6a7'},
+  {id:'kawaii',name:'可愛',icon:'🌸',rainbow:5,
+   bg1:'#ffecd2',bg2:'#fcb69f',header:'#e84393',board:'rgba(255,255,255,0.35)',empty:'rgba(255,255,255,0.4)',
+   btnP:'#ff6b9d',btnS:'rgba(255,255,255,0.5)',overlay:'rgba(255,220,230,0.9)',
+   text:'#c0392b',textDim:'rgba(192,57,43,0.5)',accent:'#e84393'},
+  {id:'ink',name:'水墨',icon:'🏔️',rainbow:7,
+   bg1:'#f5f0e8',bg2:'#e8dcc8',header:'#2c2c2c',board:'rgba(0,0,0,0.08)',empty:'rgba(139,115,85,0.15)',
+   btnP:'#8b4513',btnS:'rgba(139,115,85,0.2)',overlay:'rgba(245,240,232,0.92)',
+   text:'#2c2c2c',textDim:'rgba(44,44,44,0.45)',accent:'#c41e3a'},
+  {id:'royal',name:'皇家',icon:'👑',rainbow:10,
+   bg1:'#1a1a2e',bg2:'#16213e',header:'#ffd700',board:'rgba(255,215,0,0.1)',empty:'rgba(255,215,0,0.08)',
+   btnP:'#ffd700',btnS:'rgba(255,215,0,0.12)',overlay:'rgba(26,26,46,0.92)',
+   text:'#ffd700',textDim:'rgba(255,215,0,0.5)',accent:'#fff'},
+]
+
+function getTheme() {
+  const id = S.getTheme()
+  return THEMES.find(t => t.id === id) || THEMES[0]
+}
+
+// ===== PARTICLES =====
+class ParticleSystem {
+  constructor(){this.particles=[]}
+  emit(x,y,color,value=2){
+    const count=8+value*2, speed=1.5+value*0.5, sz=2+value*0.3
+    const colors=this._pal(value)
+    for(let i=0;i<count;i++){
+      const a=(Math.PI*2*i)/count+(Math.random()-.5)*.5, v=speed*(.5+Math.random())
+      this.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,decay:.015+Math.random()*.02,size:sz*(.6+Math.random()*.8),color:colors[Math.floor(Math.random()*colors.length)],gravity:.03+Math.random()*.02})
+    }
+  }
+  emitRainbow(x,y){
+    for(let i=0;i<30;i++){
+      const a=Math.random()*Math.PI*2, v=2+Math.random()*3, hue=(i*12)%360
+      this.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,decay:.008+Math.random()*.01,size:3+Math.random()*3,color:`hsl(${hue},100%,60%)`,gravity:.02})
+    }
+  }
+  _pal(v){
+    const tc=TILE_COLORS[v]
+    if(!tc)return['#fff']
+    return[tc.bg1,tc.bg2||tc.bg1,'#fff',tc.bg1+'88']
+  }
+  update(){
+    for(let i=this.particles.length-1;i>=0;i--){
+      const p=this.particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;p.vx*=.98;p.life-=p.decay
+      if(p.life<=0)this.particles.splice(i,1)
+    }
+  }
+  draw(ctx){
+    for(const p of this.particles){
+      ctx.save();ctx.globalAlpha=p.life
+      ctx.fillStyle=p.color;ctx.shadowColor=p.color;ctx.shadowBlur=p.size*2
+      ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill()
+      ctx.restore()
+    }
+  }
+  clear(){this.particles=[]}
+}
+
+const particles = new ParticleSystem()
+
+// ===== STORAGE =====
+const S={
+  _g(k){try{return JSON.parse(localStorage.getItem('nb2_'+k))}catch{return null}},
+  _s(k,v){try{localStorage.setItem('nb2_'+k,JSON.stringify(v))}catch{}},
+  // Items
+  getItems(){return this._g('items')||{hammer:1,shuffle:1,lightning:0}},
+  saveItems(i){this._s('items',i)},
+  useItem(t){const i=this.getItems();if((i[t]||0)<=0)return false;i[t]--;this.saveItems(i);return true},
+  addItem(t,n){const i=this.getItems();i[t]=(i[t]||0)+n;this.saveItems(i)},
+  // Theme
+  getTheme(){return this._g('theme')||'classic'},
+  setTheme(t){this._s('theme',t)},
+  getUnlockedThemes(){return this._g('unlocked')||['classic']},
+  unlockTheme(id){const u=this.getUnlockedThemes();if(u.includes(id))return false;u.push(id);this._s('unlocked',u);return true},
+  // Best scores
+  getBestEndless(){return this._g('best_endless')||0},
+  setBestEndless(s){if(s>this.getBestEndless())this._s('best_endless',s)},
+  // Stats
+  getStats(){return this._g('stats')||{gamesPlayed:0,maxTile:0,maxCombo:0,totalRainbows:0}},
+  saveStats(s){this._s('stats',s)},
+  // Daily
+  getDaily(){
+    const today=new Date().toISOString().slice(0,10)
+    const d=this._g('daily')
+    if(!d||d.date!==today){
+      const seed=today.split('-').reduce((a,b)=>a+parseInt(b),0)
+      const challenges=[
+        {desc:'合成藍色方塊',type:'tile',target:6},
+        {desc:'合成紫色方塊',type:'tile',target:7},
+        {desc:'達到500分',type:'score',target:500},
+        {desc:'達到1000分',type:'score',target:1000},
+        {desc:'達成3連擊',type:'combo',target:3},
+        {desc:'合成金色方塊',type:'tile',target:8},
+        {desc:'達到800分',type:'score',target:800},
+      ]
+      const ch={date:today,challenge:challenges[seed%challenges.length],completed:false,attempts:3,expandedRow:false,expandedCol:false}
+      this._s('daily',ch);return ch
+    }
+    return d
+  },
+  saveDaily(d){this._s('daily',d)},
+  // Leaderboard (local)
+  getLB(){return this._g('lb')||[]},
+  addLB(mode,score,extra){
+    const lb=this.getLB()
+    lb.push({mode,score,...extra,ts:Date.now()})
+    lb.sort((a,b)=>b.score-a.score)
+    this._s('lb',lb.slice(0,20))
+  },
+  getDailyStreak(){
+    const d=this._g('streak')||{count:0,lastDate:''}
+    const today=new Date().toISOString().slice(0,10)
+    if(d.lastDate===today) return d.count
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10)
+    if(d.lastDate===yesterday) return d.count
+    return 0
+  },
+  addDailyStreak(){
+    const today=new Date().toISOString().slice(0,10)
+    const d=this._g('streak')||{count:0,lastDate:''}
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10)
+    if(d.lastDate===today) return d.count
+    let count = d.lastDate===yesterday ? d.count+1 : 1
+    this._s('streak',{count,lastDate:today})
+    return count
+  },
+}
+
+// ===== CANVAS SETUP =====
+const canvas = document.createElement('canvas')
+document.body.appendChild(canvas)
+const ctx = canvas.getContext('2d')
+let W, H, dpr = window.devicePixelRatio || 1
+
+function resizeCanvas() {
+  W = Math.min(window.innerWidth, 420)
+  H = window.innerHeight
+  dpr = window.devicePixelRatio || 1
+  canvas.width = W * dpr; canvas.height = H * dpr
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px'
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.scale(dpr, dpr)
+  recalcLayout()
+}
+resizeCanvas()
+window.addEventListener('resize', resizeCanvas)
+
+// ===== GAME STATE =====
+let state = 'menu'  // menu | playing | item_select | gameover | leaderboard | themes
+let mode = 'endless' // daily | endless
+let grid = new Grid(5, 5)
+let score = 0, moves = 0, maxCombo = 0, rainbowCount = 0
+let currentPiece = 1, nextPiece = 1
+let itemSelectType = null // 'hammer' | 'lightning'
+let toasts = []
+let lastTouchCol = -1, lastTouchCell = null
+let touchStartY = 0
+let dailyAttempts = 0, dailyExpandedRow = false, dailyExpandedCol = false
+
+// ===== LAYOUT (dynamic, recalculated) =====
+let COLS, ROWS, margin, headerH, previewH, boardTop, boardW, cellGap, cellW, cellH, boardH, boardX, itemBarH, backBtnH, bottomPad
+
+function recalcLayout() {
+  COLS = grid.cols; ROWS = grid.rows
+  margin = 8
+  headerH = Math.min(85, Math.floor(H * 0.1))
+  previewH = Math.min(48, Math.floor(H * 0.06))
+  itemBarH = 48; backBtnH = 32; bottomPad = 10
+  boardTop = headerH + previewH + 4
+  boardW = W - margin * 2
+  cellGap = 3
+  const cwW = Math.floor((boardW - cellGap * (COLS + 1)) / COLS)
+  const availH = H - boardTop - itemBarH - backBtnH - bottomPad - 20
+  const cwH = Math.floor((availH - cellGap * (ROWS + 1)) / ROWS)
+  const cs = Math.max(20, Math.min(cwW, cwH))
+  cellW = cs; cellH = cs
+  boardH = cellH * ROWS + cellGap * (ROWS + 1)
+  boardX = margin
+}
+recalcLayout()
+
+function randPiece(){ return Math.random() < 0.55 ? 1 : 2 }
+currentPiece = randPiece(); nextPiece = randPiece()
+
+// ===== DRAW HELPERS =====
+function rr(x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r)
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h)
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()
+}
+
+function drawBtn(x,y,w,h,color,radius,alpha){
+  ctx.save()
+  if(alpha)ctx.globalAlpha=alpha
+  ctx.shadowColor='rgba(0,0,0,0.2)';ctx.shadowBlur=4;ctx.shadowOffsetY=2
+  ctx.fillStyle=color;rr(x,y,w,h,radius||8);ctx.fill()
+  ctx.restore()
+}
+
+function drawBg(t){
+  const g=ctx.createLinearGradient(0,0,0,H)
+  g.addColorStop(0,t.bg1);g.addColorStop(1,t.bg2)
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H)
+}
+
+function drawTile(x, y, w, h, value, t, radius) {
+  const tc = TILE_COLORS[value] || {bg1:'#555',bg2:'#333'}
+  const r = radius || 6
+
+  // Outer glow for special tiles
+  if (tc.glow) {
+    ctx.save()
+    ctx.shadowColor = tc.glow; ctx.shadowBlur = 18
+    ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0
+    ctx.fillStyle = tc.glow
+    rr(x - 2, y - 2, w + 4, h + 4, r + 2); ctx.fill()
+    ctx.restore()
+  }
+
+  // Shadow + gradient
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2
+  const grad = ctx.createLinearGradient(x, y, x, y + h)
+  grad.addColorStop(0, tc.bg1); grad.addColorStop(1, tc.bg2 || tc.bg1)
+  ctx.fillStyle = grad; rr(x, y, w, h, r); ctx.fill()
+  ctx.restore()
+
+  // Shine
+  ctx.save()
+  const shine = ctx.createLinearGradient(x, y, x, y + h * 0.45)
+  shine.addColorStop(0, 'rgba(255,255,255,0.4)'); shine.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = shine; rr(x, y, w, h * 0.45, r); ctx.fill()
+  ctx.restore()
+
+  const cx = x + w / 2, cy = y + h / 2
+  if (value === 8) {
+    ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = `${Math.floor(w * 0.45)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('★', cx, cy); ctx.restore()
+  } else if (value === 9) {
+    ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - h * 0.3); ctx.lineTo(cx + w * 0.25, cy)
+    ctx.lineTo(cx, cy + h * 0.3); ctx.lineTo(cx - w * 0.25, cy)
+    ctx.closePath(); ctx.fill()
+    ctx.restore()
+  } else if (value === 10) {
+    ctx.save()
+    const rainbow = ctx.createLinearGradient(x, y, x + w, y + h)
+    rainbow.addColorStop(0, 'rgba(255,100,100,0.25)'); rainbow.addColorStop(0.33, 'rgba(100,255,100,0.25)')
+    rainbow.addColorStop(0.66, 'rgba(100,100,255,0.25)'); rainbow.addColorStop(1, 'rgba(255,255,100,0.25)')
+    ctx.fillStyle = rainbow; rr(x, y, w, h, r); ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.font = `${Math.floor(w * 0.45)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('♛', cx, cy); ctx.restore()
+  }
+}
+
+// ===== DRAW SCREENS =====
+
+function drawMenu(t) {
+  drawBg(t)
+  // Logo
+  ctx.save()
+  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 20
+  ctx.fillStyle = t.header; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('💥 數字大爆炸', W / 2, 40)
+  ctx.restore()
+
+  ctx.fillStyle = t.textDim; ctx.font = '14px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('Drop & Merge，連鎖爆炸！', W / 2, 85)
+
+  // Mode buttons
+  const bw = W - 60, bh = 65, startX = 30, startY = 130
+
+  // Daily Challenge
+  const daily = S.getDaily()
+  const dailyDone = daily.completed
+  const dailyBtnColor = dailyDone ? 'rgba(100,100,100,0.4)' : t.btnP
+  drawBtn(startX, startY, bw, bh, dailyBtnColor, 14)
+  ctx.fillStyle = t.header; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText(dailyDone ? '✅ 今日已完成' : '📅 每日挑戰', startX + bw / 2, startY + 25)
+  ctx.fillStyle = t.textDim; ctx.font = '13px Arial'
+  const dailyInfo = dailyDone ? '明天再來！' : `${daily.challenge.desc} | 剩餘 ${daily.attempts} 次`
+  ctx.fillText(dailyInfo, startX + bw / 2, startY + 48)
+
+  // Endless
+  drawBtn(startX, startY + bh + 15, bw, bh, '#7c4dff', 14)
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Arial'
+  ctx.fillText('♾️ 無盡模式', startX + bw / 2, startY + bh + 40)
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '13px Arial'
+  ctx.fillText(`最高: ${S.getBestEndless()} 分`, startX + bw / 2, startY + bh + 58)
+
+  // Bottom buttons
+  const bbY = startY + bh * 2 + 50
+  drawBtn(30, bbY, (W - 80) / 2, 45, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('🎨 主題', 30 + (W - 80) / 4, bbY + 23)
+
+  drawBtn(W / 2 + 10, bbY, (W - 80) / 2, 45, t.btnS, 10)
+  ctx.fillText('🏆 排行', W / 2 + 10 + (W - 80) / 4, bbY + 23)
+
+  // Theme label
+  const unlocked = S.getUnlockedThemes()
+  ctx.fillStyle = t.textDim; ctx.font = '12px Arial'; ctx.textAlign = 'center'
+  ctx.fillText(`${getTheme().icon} ${getTheme().name} | 已解鎖 ${unlocked.length}/${THEMES.length} 主題`, W / 2, H - 30)
+
+  // Stats
+  const stats = S.getStats()
+  ctx.fillStyle = t.textDim; ctx.font = '12px Arial'
+  ctx.fillText(`🎮 ${stats.gamesPlayed}局 | 最高色階:${levelName(stats.maxTile)} | ${stats.totalRainbows}👑`, W / 2, H - 55)
+}
+
+function drawGameScreen(t) {
+  drawBg(t)
+  // Header
+  ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(0, 0, W, headerH - 5)
+  ctx.fillStyle = t.header; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'
+  const modeLabel = mode === 'daily' ? '📅 每日挑戰' : '♾️ 無盡'
+  ctx.fillText(modeLabel, margin, 10)
+
+  ctx.font = 'bold 14px Arial'; ctx.textAlign = 'right'
+  ctx.fillStyle = t.accent || '#ffd700'
+  ctx.fillText(`🏆 ${score}`, W - margin, 10)
+  ctx.fillStyle = t.textDim; ctx.font = '12px Arial'
+  ctx.fillText(`最高 ${mode === 'endless' ? S.getBestEndless() : '-'}`, W - margin, 28)
+
+  if (mode === 'endless') {
+    ctx.fillStyle = t.accent; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left'
+    ctx.fillText(`👑 ×${rainbowCount}`, margin, 32)
+  }
+  if (mode === 'daily') {
+    const daily = S.getDaily()
+    ctx.fillStyle = t.textDim; ctx.font = '12px Arial'; ctx.textAlign = 'left'
+    ctx.fillText(`目標: ${daily.challenge.desc} | ${daily.attempts}次`, margin, 32)
+  }
+
+  // Preview
+  ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'left'
+  ctx.fillText('當前', margin + 8, headerH + 2)
+  ctx.fillText('下一', margin + cellW + 40, headerH + 2)
+  drawTile(margin + 12, headerH + 16, Math.min(30, cellW * 0.5), Math.min(30, cellH * 0.5), currentPiece, t, 5)
+  drawTile(margin + cellW + 44, headerH + 16, Math.min(30, cellW * 0.5), Math.min(30, cellH * 0.5), nextPiece, t, 5)
+
+  // Board background
+  ctx.fillStyle = t.board
+  rr(boardX, boardTop, boardW, boardH, 12); ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1
+  rr(boardX, boardTop, boardW, boardH, 12); ctx.stroke()
+
+  // Column highlight
+  if (typeof lastTouchCol === 'number' && lastTouchCol >= 0 && state === 'playing') {
+    const cx = boardX + cellGap + lastTouchCol * (cellW + cellGap)
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'
+    rr(cx, boardTop + cellGap, cellW, boardH - cellGap * 2, 6); ctx.fill()
+  }
+
+  // Cells
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = boardX + cellGap + c * (cellW + cellGap)
+      const y = boardTop + cellGap + r * (cellH + cellGap)
+      const v = grid.cells[r][c]
+      ctx.fillStyle = t.empty; rr(x, y, cellW, cellH, 5); ctx.fill()
+      if (v > 0) drawTile(x + 1, y + 1, cellW - 2, cellH - 2, v, t, 5)
+    }
+  }
+
+  // Item bar
+  const items = S.getItems()
+  const itemTypes = [
+    { key: 'hammer', icon: '🔨', label: items.hammer || 0 },
+    { key: 'shuffle', icon: '🔀', label: items.shuffle || 0 },
+    { key: 'lightning', icon: '⚡', label: items.lightning || 0 },
+  ]
+  const ibY = boardTop + boardH + 5
+  const ibW = (boardW - 8) / 3
+  const ibH = Math.min(42, itemBarH - 6)
+  for (let i = 0; i < itemTypes.length; i++) {
+    const ix = boardX + i * (ibW + 4)
+    const isActive = state === 'item_select' && itemSelectType === itemTypes[i].key
+    drawBtn(ix, ibY, ibW, ibH, isActive ? t.accent : t.btnS, 8)
+    ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = t.header
+    ctx.fillText(itemTypes[i].icon, ix + ibW / 2, ibY + ibH * 0.35)
+    ctx.font = 'bold 10px Arial'
+    ctx.fillStyle = t.text || '#fff'
+    ctx.fillText(`×${itemTypes[i].label}`, ix + ibW / 2, ibY + ibH * 0.75)
+  }
+
+  // Back button
+  const bbY = ibY + ibH + 4
+  drawBtn(margin, bbY, 65, backBtnH, t.btnS, 8)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 返回', margin + 32, bbY + backBtnH / 2)
+
+  // Item select overlay
+  if (state === 'item_select') {
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, W, H)
+    ctx.fillStyle = t.header; ctx.font = '15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+    const hint = itemSelectType === 'hammer' ? '🔨 點擊要消除的方塊' : '⚡ 點擊要消除的顏色'
+    ctx.fillText(hint, W / 2, boardTop - 22)
+  }
+}
+
+function drawGameOver(t) {
+  drawBg(t)
+  ctx.fillStyle = t.overlay; ctx.fillRect(0, 0, W, H)
+  const cy = H / 2 - 100
+
+  drawBtn(25, cy - 20, W - 50, 250, 'rgba(0,0,0,0.3)', 20, 0.3)
+
+  const daily = mode === 'daily' ? S.getDaily() : null
+  const isDailyDone = daily && daily.completed
+
+  ctx.fillStyle = t.header; ctx.font = 'bold 28px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText(isDailyDone ? '🎉 通關！' : '💥 遊戲結束', W / 2, cy + 10)
+
+  ctx.fillStyle = t.accent || '#ffd700'; ctx.font = 'bold 44px Arial'
+  ctx.fillText(String(score), W / 2, cy + 58)
+
+  ctx.fillStyle = t.textDim; ctx.font = '13px Arial'
+  ctx.fillText(`最大: ${levelName(grid.getMaxValue())} | ${moves} 步 | ${maxCombo}x 連擊`, W / 2, cy + 92)
+
+  if (mode === 'endless') {
+    ctx.fillStyle = t.accent; ctx.font = 'bold 16px Arial'
+    ctx.fillText(`👑 彩虹 ×${rainbowCount}`, W / 2, cy + 120)
+  }
+
+  if (mode === 'daily') {
+    ctx.fillStyle = t.textDim; ctx.font = '13px Arial'
+    ctx.fillText(`目標: ${daily.challenge.desc}`, W / 2, cy + 120)
+    if (!isDailyDone && daily.attempts > 0) {
+      ctx.fillStyle = t.accent; ctx.font = 'bold 14px Arial'
+      ctx.fillText(`📹 看廣告續命 (擴展棋盤)`, W / 2, cy + 145)
+    }
+  }
+
+  // Buttons
+  const bw = 125, bh = 44
+  if (mode === 'daily' && !isDailyDone && (dailyExpandedRow === false || dailyExpandedCol === false)) {
+    // Continue button
+    drawBtn(W / 2 - bw / 2, cy + 165, bw, bh, t.btnP, 12)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Arial'
+    ctx.fillText('📹 續命', W / 2, cy + 187)
+  } else {
+    drawBtn(W / 2 - bw - 8, cy + 165, bw, bh, t.btnP, 12)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Arial'
+    ctx.fillText('再來一局', W / 2 - bw / 2 - 8, cy + 187)
+
+    drawBtn(W / 2 + 8, cy + 165, bw, bh, t.btnS, 12)
+    ctx.fillStyle = t.text || '#fff'
+    ctx.fillText('回菜單', W / 2 + bw / 2 + 8, cy + 187)
+  }
+}
+
+function drawLeaderboard(t) {
+  drawBg(t)
+  ctx.fillStyle = t.header; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('🏆 排行榜', W / 2, 30)
+
+  const lb = S.getLB()
+  const dailyLb = lb.filter(e => e.mode === 'daily')
+  const endlessLb = lb.filter(e => e.mode === 'endless')
+
+  ctx.fillStyle = t.header; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('📅 每日挑戰', W / 2, 80)
+  const streak = S.getDailyStreak()
+  ctx.fillStyle = t.textDim; ctx.font = '13px Arial'
+  ctx.fillText(`連續完成: ${streak} 天 | 總完成: ${dailyLb.length} 次`, W / 2, 105)
+
+  ctx.fillStyle = t.header; ctx.font = 'bold 16px Arial'
+  ctx.fillText('♾️ 無盡模式 TOP 5', W / 2, 150)
+
+  for (let i = 0; i < Math.min(5, endlessLb.length); i++) {
+    const e = endlessLb[i]
+    const yy = 180 + i * 35
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`
+    ctx.fillStyle = t.text; ctx.font = '14px Arial'; ctx.textAlign = 'left'
+    ctx.fillText(`${medal} ${e.score} 分 | 👑×${e.rainbow || 0} | ${levelName(e.maxTile || 0)}`, 40, yy)
+  }
+
+  if (endlessLb.length === 0) {
+    ctx.fillStyle = t.textDim; ctx.font = '13px Arial'; ctx.textAlign = 'center'
+    ctx.fillText('還沒有記錄，快去玩吧！', W / 2, 185)
+  }
+
+  // Back
+  drawBtn(30, H - 65, W - 60, 45, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 返回', W / 2, H - 42)
+}
+
+function drawThemes(t) {
+  drawBg(t)
+  ctx.fillStyle = t.header; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('🎨 主題', W / 2, 25)
+
+  const unlocked = S.getUnlockedThemes()
+  const startY = 70
+  const cols = 2, bw = (W - 50) / 2, bh = 80
+
+  for (let i = 0; i < THEMES.length; i++) {
+    const th = THEMES[i]
+    const col = i % cols, row = Math.floor(i / cols)
+    const tx = 15 + col * (bw + 20), ty = startY + row * (bh + 10)
+    const isUnlocked = unlocked.includes(th.id)
+    const isActive = S.getTheme() === th.id
+
+    drawBtn(tx, ty, bw, bh, isActive ? t.btnP : t.btnS, 10, isUnlocked ? 1 : 0.4)
+
+    ctx.fillStyle = isUnlocked ? t.header : t.textDim; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(`${th.icon} ${th.name}`, tx + bw / 2, ty + 25)
+
+    if (isUnlocked) {
+      ctx.fillStyle = t.textDim; ctx.font = '11px Arial'
+      ctx.fillText(isActive ? '✅ 使用中' : '點擊切換', tx + bw / 2, ty + 50)
+    } else {
+      ctx.fillStyle = t.textDim; ctx.font = '11px Arial'
+      ctx.fillText(`🔒 需要 ${th.rainbow} 👑 解鎖`, tx + bw / 2, ty + 50)
+    }
+  }
+
+  // Back
+  drawBtn(30, H - 65, W - 60, 45, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('← 返回', W / 2, H - 42)
+}
+
+function drawToasts(t) {
+  const now = Date.now()
+  for (let i = toasts.length - 1; i >= 0; i--) {
+    if (now - toasts[i].time > 2000) { toasts.splice(i, 1); continue }
+  }
+  for (let i = 0; i < toasts.length; i++) {
+    const toast = toasts[i]
+    const ty = 50 + i * 35
+    ctx.save()
+    ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(0,0,0,0.3)'
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; rr(W/2-125, ty, 250, 30, 15); ctx.fill()
+    ctx.shadowBlur = 0
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(`${toast.icon} ${toast.text}`, W / 2, ty + 15)
+    ctx.restore()
+  }
+}
+
+// ===== GAME LOGIC =====
+
+function startGame(m) {
+  mode = m
+  grid = new Grid(5, 5)
+  score = 0; moves = 0; maxCombo = 0; rainbowCount = 0
+  currentPiece = randPiece(); nextPiece = randPiece()
+  itemSelectType = null
+  dailyExpandedRow = false; dailyExpandedCol = false
+  recalcLayout()
+  if (mode === 'daily') {
+    const daily = S.getDaily()
+    // Reset expansion state for fresh attempt
+    dailyExpandedRow = false; dailyExpandedCol = false
+  }
+  state = 'playing'
+}
+
+function doDrop(col) {
+  if (state !== 'playing') return
+  const row = grid.drop(col, currentPiece)
+  if (row === -1) return // column full, ignore
+  moves++
+
+  const prevRainbow = countRainbow()
+  const result = grid.processMerges()
+  const newRainbow = countRainbow()
+
+  if (result.score > 0) {
+    score += result.score
+    if (result.chains > maxCombo) maxCombo = result.chains
+    // Particles at merge location
+    for (const ev of result.events) {
+      const x = boardX + cellGap + ev.anchor.c * (cellW + cellGap) + cellW / 2
+      const y = boardTop + cellGap + ev.anchor.r * (cellH + cellGap) + cellH / 2
+      particles.emit(x, y, null, ev.newValue)
+      if (ev.chain > 1) particles.emit(x, y, null, ev.chain + 5)
+    }
+    if (result.chains >= 3) addToast(`⚡ ${result.chains}連擊！`, '💥')
+  }
+
+  // Rainbow tracking
+  if (newRainbow > prevRainbow) {
+    rainbowCount += (newRainbow - prevRainbow)
+    for (let i = prevRainbow; i < newRainbow; i++) {
+      addToast(`👑 彩虹方塊！(${rainbowCount})`, '🎉')
+      particles.emitRainbow(W / 2, H / 2)
+    }
+  }
+
+  currentPiece = nextPiece
+  nextPiece = randPiece()
+
+  // Check daily challenge completion
+  if (mode === 'daily') checkDailyComplete()
+
+  // Check game over
+  if (grid.isGameOver()) endGame()
+}
+
+function countRainbow() {
+  let n = 0
+  for (const row of grid.cells) for (const v of row) if (v === 10) n++
+  return n
+}
+
+function checkDailyComplete() {
+  const daily = S.getDaily()
+  const ch = daily.challenge
+  let passed = false
+  if (ch.type === 'tile' && grid.getMaxValue() >= ch.target) passed = true
+  if (ch.type === 'score' && score >= ch.target) passed = true
+  if (ch.type === 'combo' && maxCombo >= ch.target) passed = true
+  if (passed) {
+    daily.completed = true
+    S.saveDaily(daily)
+    S.addDailyStreak()
+    // Reward items
+    S.addItem('hammer', 1); S.addItem('shuffle', 1); S.addItem('lightning', 1)
+    addToast('🎁 獲得道具獎勵！', '✅')
+    state = 'gameover' // show victory screen
+  }
+}
+
+function endGame() {
+  state = 'gameover'
+  // Save stats
+  const stats = S.getStats()
+  stats.gamesPlayed++
+  if (grid.getMaxValue() > stats.maxTile) stats.maxTile = grid.getMaxValue()
+  if (maxCombo > stats.maxCombo) stats.maxCombo = maxCombo
+  stats.totalRainbows = (stats.totalRainbows || 0) + rainbowCount
+  S.saveStats(stats)
+
+  if (mode === 'endless') {
+    S.setBestEndless(score)
+    // Unlock themes based on rainbow count
+    const unlocked = S.getUnlockedThemes()
+    for (const th of THEMES) {
+      if (th.rainbow > 0 && rainbowCount >= th.rainbow && !unlocked.includes(th.id)) {
+        if (S.unlockTheme(th.id)) {
+          addToast(`🎨 解鎖主題: ${th.icon} ${th.name}！`, '🎉')
+        }
+      }
+    }
+    S.addLB('endless', score, { rainbow: rainbowCount, maxTile: grid.getMaxValue() })
+  }
+  if (mode === 'daily') {
+    const daily = S.getDaily()
+    daily.attempts--
+    S.saveDaily(daily)
+    if (!daily.completed) {
+      S.addLB('daily', 0, { passed: false })
+    }
+  }
+}
+
+function useItemAction(type) {
+  if (type === 'hammer' || type === 'lightning') {
+    if (!S.useItem(type)) { addToast('道具不足！', '❌'); return }
+    itemSelectType = type
+    state = 'item_select'
+  } else if (type === 'shuffle') {
+    if (!S.useItem('shuffle')) { addToast('道具不足！', '❌'); return }
+    grid.shuffle()
+    addToast('🔀 洗牌完成！', '✅')
+    // Check for merges after shuffle
+    const result = grid.processMerges()
+    if (result.score > 0) score += result.score
+    if (grid.isGameOver()) endGame()
+  }
+}
+
+function doItemTarget(r, c) {
+  if (itemSelectType === 'hammer') {
+    const cleared = grid.hammer(r, c)
+    if (cleared.length > 0) {
+      const x = boardX + cellGap + c * (cellW + cellGap) + cellW / 2
+      const y = boardTop + cellGap + r * (cellH + cellGap) + cellH / 2
+      particles.emit(x, y, null, cleared[0].value)
+      addToast('🔨 消除！', '✅')
+    }
+  } else if (itemSelectType === 'lightning') {
+    const cleared = grid.lightning(r, c)
+    if (cleared.length > 0) {
+      for (const cell of cleared) {
+        const x = boardX + cellGap + cell.c * (cellW + cellGap) + cellW / 2
+        const y = boardTop + cellGap + cell.r * (cellH + cellGap) + cellH / 2
+        particles.emit(x, y, null, cell.value)
+      }
+      addToast(`⚡ 消除 ${cleared.length} 個同色！`, '✅')
+    }
+  }
+  itemSelectType = null
+  state = 'playing'
+  // Process any merges
+  const result = grid.processMerges()
+  if (result.score > 0) score += result.score
+  if (grid.isGameOver()) endGame()
+}
+
+function dailyContinue(what) {
+  const daily = S.getDaily()
+  if (what === 'row' && !dailyExpandedRow) {
+    grid.expandRow(); dailyExpandedRow = true
+    addToast('↕️ 棋盤擴展 +1行！', '✅')
+  } else if (what === 'col' && !dailyExpandedCol) {
+    grid.expandCol(); dailyExpandedCol = true
+    addToast('↔️ 棋盤擴展 +1列！', '✅')
+  }
+  recalcLayout()
+  state = 'playing'
+}
+
+function addToast(text, icon) {
+  toasts.push({ text, icon, time: Date.now() })
+  if (toasts.length > 3) toasts.shift()
+}
+
+// ===== INPUT =====
+
+function handleClick(x, y) {
+  if (state === 'menu') handleMenuClick(x, y)
+  else if (state === 'playing') handlePlayClick(x, y)
+  else if (state === 'item_select') handleItemSelectClick(x, y)
+  else if (state === 'gameover') handleGameOverClick(x, y)
+  else if (state === 'leaderboard') handleBackOnly(x, y)
+  else if (state === 'themes') handleThemesClick(x, y)
+}
+
+function handleMenuClick(x, y) {
+  const bw = W - 60, bh = 65, startX = 30, startY = 130
+  const daily = S.getDaily()
+
+  // Daily button
+  if (x >= startX && x <= startX + bw && y >= startY && y <= startY + bh) {
+    if (!daily.completed && daily.attempts > 0) startGame('daily')
+    else if (daily.attempts <= 0) addToast('今日次數已用完', '❌')
+    return
+  }
+  // Endless button
+  if (x >= startX && x <= startX + bw && y >= startY + bh + 15 && y <= startY + bh * 2 + 15) {
+    startGame('endless'); return
+  }
+  // Theme button
+  const bbY = startY + bh * 2 + 50
+  if (y >= bbY && y <= bbY + 45) {
+    if (x >= 30 && x <= 30 + (W - 80) / 2) { state = 'themes'; return }
+    if (x >= W / 2 + 10 && x <= W / 2 + 10 + (W - 80) / 2) { state = 'leaderboard'; return }
+  }
+}
+
+function handlePlayClick(x, y) {
+  const ibY = boardTop + boardH + 5
+  const ibW = (boardW - 8) / 3
+  const ibH = Math.min(42, itemBarH - 6)
+  const itemKeys = ['hammer', 'shuffle', 'lightning']
+  for (let i = 0; i < 3; i++) {
+    const ix = boardX + i * (ibW + 4)
+    if (x >= ix && x <= ix + ibW && y >= ibY && y <= ibY + ibH) {
+      useItemAction(itemKeys[i]); return
+    }
+  }
+  const bbY = ibY + ibH + 4
+  if (x >= margin && x <= margin + 65 && y >= bbY && y <= bbY + backBtnH) {
+    state = 'menu'; return
+  }
+  const col = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+  if (col >= 0 && col < COLS && y >= boardTop && y <= boardTop + boardH) {
+    doDrop(col)
+  }
+}
+
+function handleItemSelectClick(x, y) {
+  // Cancel button
+  const ibY = boardTop + boardH + 5
+  const ibH = Math.min(42, itemBarH - 6)
+  const bbY = ibY + ibH + 4
+  if (x >= margin && x <= margin + 65 && y >= bbY && y <= bbY + backBtnH) {
+    // Refund item
+    S.addItem(itemSelectType, 1)
+    itemSelectType = null; state = 'playing'; return
+  }
+  // Board cell
+  const col = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+  const row = Math.floor((y - boardTop - cellGap) / (cellH + cellGap))
+  if (col >= 0 && col < COLS && row >= 0 && row < ROWS && grid.cells[row][col] > 0) {
+    doItemTarget(row, col)
+  }
+}
+
+function handleGameOverClick(x, y) {
+  const cy = H / 2 - 100
+  const bw = 125, bh = 44
+  const daily = mode === 'daily' ? S.getDaily() : null
+  const canContinue = mode === 'daily' && !daily.completed && (dailyExpandedRow === false || dailyExpandedCol === false)
+
+  if (canContinue) {
+    // Continue button (center)
+    if (x >= W / 2 - bw / 2 && x <= W / 2 + bw / 2 && y >= cy + 165 && y <= cy + 165 + bh) {
+      // Watch ad (placeholder) then expand
+      if (!dailyExpandedRow && !dailyExpandedCol) {
+        // First time: expand row by default (could let player choose, but keep simple)
+        dailyContinue('row')
+      } else if (dailyExpandedRow && !dailyExpandedCol) {
+        dailyContinue('col')
+      } else if (!dailyExpandedRow && dailyExpandedCol) {
+        dailyContinue('row')
+      }
+      return
+    }
+  } else {
+    // 再來一局
+    if (x >= W / 2 - bw - 8 && x <= W / 2 - 8 && y >= cy + 165 && y <= cy + 165 + bh) {
+      if (mode === 'daily') {
+        const d = S.getDaily()
+        if (!d.completed && d.attempts > 0) startGame('daily')
+        else state = 'menu'
+      } else startGame('endless')
+      return
+    }
+    // 回菜單
+    if (x >= W / 2 + 8 && x <= W / 2 + 8 + bw && y >= cy + 165 && y <= cy + 165 + bh) {
+      state = 'menu'; return
+    }
+  }
+}
+
+function handleBackOnly(x, y) {
+  if (y >= H - 65 && y <= H - 20) { state = 'menu'; return }
+}
+
+function handleThemesClick(x, y) {
+  // Back
+  if (y >= H - 65 && y <= H - 20) { state = 'menu'; return }
+  // Theme buttons
+  const unlocked = S.getUnlockedThemes()
+  const startY = 70, cols = 2, bw = (W - 50) / 2, bh = 80
+  for (let i = 0; i < THEMES.length; i++) {
+    const col = i % cols, row = Math.floor(i / cols)
+    const tx = 15 + col * (bw + 20), ty = startY + row * (bh + 10)
+    if (x >= tx && x <= tx + bw && y >= ty && y <= ty + bh) {
+      if (unlocked.includes(THEMES[i].id)) {
+        S.setTheme(THEMES[i].id)
+        addToast(`切換至 ${THEMES[i].name}`, '🎨')
+      } else {
+        addToast(`需要 ${THEMES[i].rainbow} 👑 解鎖`, '🔒')
+      }
+      return
+    }
+  }
+}
+
+// ===== TOUCH & CLICK EVENTS =====
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault()
+  const touch = e.touches[0]
+  touchStartY = touch.clientY
+  handleTouchMove(touch.clientX, touch.clientY)
+}, { passive: false })
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault()
+  const touch = e.touches[0]
+  handleTouchMove(touch.clientX, touch.clientY)
+}, { passive: false })
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault()
+  lastTouchCol = -1; lastTouchCell = null
+}, { passive: false })
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect()
+  handleClick(e.clientX - rect.left, e.clientY - rect.top)
+})
+
+function handleTouchMove(x, y) {
+  if (state === 'playing' || state === 'item_select') {
+    lastTouchCol = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+    const row = Math.floor((y - boardTop - cellGap) / (cellH + cellGap))
+    lastTouchCell = (lastTouchCol >= 0 && lastTouchCol < COLS && row >= 0 && row < ROWS) ? { r: row, c: lastTouchCol } : null
+  }
+  if (state === 'playing' && y - touchStartY > 50) {
+    const col = Math.floor((x - boardX - cellGap) / (cellW + cellGap))
+    if (col >= 0 && col < COLS) doDrop(col)
+    touchStartY = y
+  }
+}
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  if (state !== 'playing') return
+  const col = parseInt(e.key) - 1
+  if (col >= 0 && col < COLS) doDrop(col)
+  if (e.key === 'Escape') state = 'menu'
+})
+
+// ===== MAIN LOOP =====
+function drawAll() {
+  const t = getTheme()
+  ctx.clearRect(0, 0, W, H)
+
+  if (state === 'menu') drawMenu(t)
+  else if (state === 'playing' || state === 'item_select') drawGameScreen(t)
+  else if (state === 'gameover') drawGameOver(t)
+  else if (state === 'leaderboard') drawLeaderboard(t)
+  else if (state === 'themes') drawThemes(t)
+
+  particles.update()
+  particles.draw(ctx)
+  drawToasts(t)
+
+  requestAnimationFrame(drawAll)
+}
+drawAll()
+</script>
+</body>
+</html>
