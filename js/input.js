@@ -61,10 +61,11 @@ function handleMenuClick(px, py) {
   // Right icons (4: settings, theme, achievement, leaderboard)
   var iconX = W - MI_W - 4
   if (px >= iconX && px <= iconX + MI_W) {
-    if (py >= 10 && py < 10 + MI_H) { addToast('\u2699\uFE0F \u8A2D\u5B9A\u5373\u5C07\u63A8\u51FA', '\uD83D\uDEE0\uFE0F'); return }
-    if (py >= 10 + MI_GAP && py < 10 + MI_GAP + MI_H) { state = 'themes'; return }
-    if (py >= 10 + MI_GAP * 2 && py < 10 + MI_GAP * 2 + MI_H) { addToast('\uD83C\uDFC6 \u6210\u5C31\u5373\u5C07\u63A8\u51FA', '\u2B50'); return }
-    if (py >= 10 + MI_GAP * 3 && py < 10 + MI_GAP * 3 + MI_H) { state = 'leaderboard'; return }
+    var iconY0 = 90
+    if (py >= iconY0 && py < iconY0 + MI_H) { addToast('\u2699\uFE0F \u8A2D\u5B9A\u5373\u5C07\u63A8\u51FA', '\uD83D\uDEE0\uFE0F'); return }
+    if (py >= iconY0 + MI_GAP && py < iconY0 + MI_GAP + MI_H) { state = 'themes'; return }
+    if (py >= iconY0 + MI_GAP * 2 && py < iconY0 + MI_GAP * 2 + MI_H) { addToast('\uD83C\uDFC6 \u6210\u5C31\u5373\u5C07\u63A8\u51FA', '\u2B50'); return }
+    if (py >= iconY0 + MI_GAP * 3 && py < iconY0 + MI_GAP * 3 + MI_H) { state = 'leaderboard'; return }
   }
 
   // 每日挑戰

@@ -7,19 +7,13 @@ var MI_W = 44, MI_H = 50, MI_GAP = 54
 function drawMenu(t) {
   drawBg(t)
 
-  // Title: 方塊(彩色) 爆(白) 爆(黑曜石)
+  // Title: 方塊(幻彩彩虹) 爆(白) 爆(黑曜石)
   ctx.textBaseline = 'middle'
   var titleY = 32
   ctx.save()
   ctx.font = 'bold 38px Arial'
   ctx.textAlign = 'center'
   var chars = ['\u65B9', '\u584A', '\u7206', '\u7206']
-  var charColors = [
-    '#FF6B6B',  // 方 - 紅
-    '#18DCFF',  // 塊 - 青
-    '#FFFFFF',  // 爆 - 白
-    '#2C2C2C',  // 爆 - 黑曜石
-  ]
   // Measure total width
   var totalW = 0
   var cw = []
@@ -32,15 +26,22 @@ function drawMenu(t) {
   totalW += gap * (chars.length - 1)
   var tx = W / 2 - totalW / 2
   for (var ci = 0; ci < chars.length; ci++) {
-    // Glow for white char, outline for obsidian
-    if (ci === 2) {
+    if (ci < 2) {
+      // 方塊: rainbow shimmer gradient per char
+      var rGrad = ctx.createLinearGradient(tx, titleY - 20, tx + cw[ci], titleY + 20)
+      var phase = frameCount * 0.02 + ci * 1.5
+      rGrad.addColorStop(0, 'hsl(' + ((phase * 30) % 360) + ',100%,65%)')
+      rGrad.addColorStop(0.5, 'hsl(' + ((phase * 30 + 120) % 360) + ',100%,65%)')
+      rGrad.addColorStop(1, 'hsl(' + ((phase * 30 + 240) % 360) + ',100%,65%)')
+      ctx.fillStyle = rGrad
+      ctx.shadowColor = 'hsl(' + ((phase * 30 + 60) % 360) + ',100%,60%)'; ctx.shadowBlur = 10
+    } else if (ci === 2) {
+      ctx.fillStyle = '#FFFFFF'
       ctx.shadowColor = 'rgba(255,255,255,0.6)'; ctx.shadowBlur = 10
-    } else if (ci === 3) {
-      ctx.shadowColor = 'rgba(44,44,44,0.8)'; ctx.shadowBlur = 6
     } else {
-      ctx.shadowColor = charColors[ci]; ctx.shadowBlur = 8
+      ctx.fillStyle = '#2C2C2C'
+      ctx.shadowColor = 'rgba(44,44,44,0.8)'; ctx.shadowBlur = 6
     }
-    ctx.fillStyle = charColors[ci]
     ctx.textAlign = 'left'
     ctx.fillText(chars[ci], tx, titleY)
     tx += cw[ci] + gap
