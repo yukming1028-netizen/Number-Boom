@@ -20,6 +20,7 @@ function startGame(m) {
   hoverCol = -1
   gameStartTime = Date.now()
   autoItemsUsed = { hammer: 0, swap: 0, lightning: 0 }
+  showSettings = false; showExitConfirm = false
   recalcLayout()
   state = 'playing'
 }

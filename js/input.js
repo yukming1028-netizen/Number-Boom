@@ -13,6 +13,17 @@ canvas.addEventListener('touchmove', function(e) {
   var rect = canvas.getBoundingClientRect()
   var px = touch.clientX - rect.left
   var py = touch.clientY - rect.top
+  // Settings slider drag
+  if (showSettings) {
+    var pw = Math.min(280, W - 40)
+    var panX = W / 2 - pw / 2, panY = H / 2 - 300 / 2
+    var slX = panX + 20, slY = panY + 78, slW = pw - 40
+    if (py >= slY - 15 && py <= slY + 25 && px >= slX && px <= slX + slW) {
+      volumeLevel = Math.max(0, Math.min(1, (px - slX) / slW))
+      S.setVolume(volumeLevel)
+      return
+    }
+  }
   // Only track hover within board area
   if (py >= boardTop && py <= boardTop + boardH && px >= boardX && px <= boardX + boardW) {
     hoverCol = pixelToCol(px)
@@ -47,6 +58,10 @@ canvas.addEventListener('mouseleave', function() {
 })
 
 function handleClick(px, py) {
+  // Exit confirm panel takes priority
+  if (showExitConfirm) { handleExitConfirmClick(px, py); return }
+  // Settings panel
+  if (showSettings) { handleSettingsClick(px, py); return }
   if (state === 'menu') { handleMenuClick(px, py); return }
   if (state === 'playing' || state === 'item_select') { handlePlayClick(px, py); return }
   if (state === 'gameover') { handleGameOverClick(px, py); return }
@@ -98,6 +113,11 @@ function handleMenuClick(px, py) {
 }
 
 function handlePlayClick(px, py) {
+  // Settings gear — top right circle area
+  if (px >= W - 35 && px <= W - 5 && py >= 5 && py <= 35) {
+    showSettings = true; return
+  }
+
   // Item bar — full width layout
   var items = S.getItems()
   var itemKeys = ['hammer', 'swap', 'lightning']
@@ -237,6 +257,63 @@ function handleLeaderboardClick(px, py) {
   }
   // Back — tap title area
   if (py <= 40) { state = 'menu' }
+}
+
+function handleSettingsClick(px, py) {
+  var t = getTheme()
+  var pw = Math.min(280, W - 40), ph = 300
+  var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
+
+  // Close X — top right
+  if (px >= panX + pw - 30 && px <= panX + pw && py >= panY && py <= panY + 30) {
+    showSettings = false; return
+  }
+
+  // Volume slider
+  var slX = panX + 20, slY = panY + 78, slW = pw - 40, slH = 8
+  if (py >= slY - 10 && py <= slY + slH + 10 && px >= slX && px <= slX + slW) {
+    volumeLevel = Math.max(0, Math.min(1, (px - slX) / slW))
+    S.setVolume(volumeLevel)
+    return
+  }
+
+  // Mute checkbox
+  var cbX = panX + 20, cbY = panY + 100, cbS = 20
+  if (px >= cbX && px <= cbX + cbS && py >= cbY && py <= cbY + cbS) {
+    soundMuted = !soundMuted; S.setMuted(soundMuted); return
+  }
+
+  // Continue button
+  var btnW = pw - 40, btnH = 44
+  var btn1Y = panY + 140
+  if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn1Y && py <= btn1Y + btnH) {
+    showSettings = false; return
+  }
+
+  // Exit button
+  var btn2Y = panY + 196
+  if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn2Y && py <= btn2Y + btnH) {
+    showSettings = false; showExitConfirm = true; return
+  }
+}
+
+function handleExitConfirmClick(px, py) {
+  var t = getTheme()
+  var pw = Math.min(260, W - 60), ph = 170
+  var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
+
+  var btnW = (pw - 50) / 2, btnH = 40
+  var btn1X = panX + 15, btn2X = panX + pw - btnW - 15, btnY = panY + ph - 58
+
+  // Confirm exit
+  if (px >= btn1X && px <= btn1X + btnW && py >= btnY && py <= btnY + btnH) {
+    showExitConfirm = false; showSettings = false
+    state = 'menu'; return
+  }
+  // Cancel
+  if (px >= btn2X && px <= btn2X + btnW && py >= btnY && py <= btnY + btnH) {
+    showExitConfirm = false; return
+  }
 }
 
 function pixelToCol(px) {

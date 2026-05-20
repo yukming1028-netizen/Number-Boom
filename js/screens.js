@@ -106,6 +106,11 @@ function drawGameScreen(t) {
   var modeLabel = mode === 'daily' ? '\uD83D\uDCC5\u6BCF\u65E5' : '\uD83C\uDFAE\u7121\u76E1'
   ctx.fillText(modeLabel + '  ' + score, margin + 2, 4)
 
+  // Settings gear — top right
+  if (!showSettings) {
+    drawSvgIcon(W - 18, 18, 22, 'gear', t.textDim)
+  }
+
   // Current piece (big) + Next piece (small) — top right, current LEFT of next
   var npSize = 24, npGap = 10
   var npX = W - margin - npSize       // next piece (rightmost)
@@ -206,7 +211,7 @@ function drawItemBar(t) {
   ]
   var ibGap = 6
   var ibW = (boardW - ibGap * 2) / 3
-  var ibH = 62
+  var ibH = 56
   var ibY = boardTop + boardH + 8
 
   for (var i = 0; i < 3; i++) {
@@ -214,30 +219,31 @@ function drawItemBar(t) {
     var isActive = itemSelectType === itemTypes[i].key
     drawBtn(ix, ibY, ibW, ibH, isActive ? (t.accent || '#ffd700') : t.btnS, 8)
 
-    // SVG icon
-    drawSvgIcon(ix + ibW / 2, ibY + 14, 18, itemTypes[i].icon, t.header)
+    // Icon on left side
+    drawSvgIcon(ix + 16, ibY + ibH / 2, 22, itemTypes[i].icon, t.header)
 
-    // Description — clearer with shadow + larger font
+    // Text block on right side
+    var textX = ix + 34
     ctx.save()
-    ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1
-    ctx.fillStyle = t.text || '#fff'
-    ctx.fillText(itemTypes[i].desc, ix + ibW / 2, ibY + 32)
-    ctx.restore()
-
-    // Count — prominent with color
-    ctx.save()
-    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
     ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 2
+
+    // Description — bold 11px
+    ctx.font = 'bold 11px Arial'
+    ctx.fillStyle = t.text || '#fff'
+    ctx.fillText(itemTypes[i].desc, textX, ibY + 18)
+
+    // Count — prominent accent color
+    ctx.font = 'bold 12px Arial'
     if (itemTypes[i].count > 0) {
       ctx.fillStyle = t.accent || '#ffd700'
-      ctx.fillText(itemTypes[i].emoji + '\u00D7' + itemTypes[i].count, ix + ibW / 2, ibY + 50)
+      ctx.fillText('\u00D7' + itemTypes[i].count, textX, ibY + 38)
     } else if (mode === 'daily') {
       ctx.fillStyle = '#ffd700'
-      ctx.fillText('\uD83D\uDCFA+1', ix + ibW / 2, ibY + 50)
+      ctx.fillText('\uD83D\uDCFA+1', textX, ibY + 38)
     } else {
       ctx.fillStyle = t.textDim
-      ctx.fillText('\u00D70', ix + ibW / 2, ibY + 50)
+      ctx.fillText('\u00D70', textX, ibY + 38)
     }
     ctx.restore()
   }
@@ -532,6 +538,121 @@ function drawLeaderboard(t) {
   drawBtn(margin, backY, backW, 40, t.btnS, 10)
   ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
   ctx.fillText('\u2190 \u8FD4\u56DE', W / 2, backY + 20)
+}
+
+// ===== SETTINGS PANEL =====
+function drawSettingsPanel(t) {
+  if (!showSettings) return
+  // Overlay
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H)
+
+  var pw = Math.min(280, W - 40), ph = 300
+  var px = W / 2 - pw / 2, py = H / 2 - ph / 2
+
+  // Card
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 20
+  ctx.fillStyle = t.board || '#1a1a2e'
+  rr(px, py, pw, ph, 16); ctx.fill()
+  ctx.shadowBlur = 0
+  // Border
+  ctx.strokeStyle = t.accent || '#ffd700'; ctx.lineWidth = 1.5
+  rr(px, py, pw, ph, 16); ctx.stroke()
+  ctx.restore()
+
+  // Title
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 18px Arial'
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  ctx.fillText('\u2699\uFE0F \u8A2D\u5B9A', W / 2, py + 16)
+
+  // Volume slider
+  ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'
+  ctx.textAlign = 'left'
+  ctx.fillText('\uD83D\uDD0A \u97F3\u91CF', px + 20, py + 55)
+  // Slider track
+  var slX = px + 20, slY = py + 78, slW = pw - 40, slH = 8
+  ctx.fillStyle = t.btnS || '#333'
+  rr(slX, slY, slW, slH, 4); ctx.fill()
+  // Slider fill
+  var fillW = slW * volumeLevel
+  ctx.fillStyle = t.accent || '#ffd700'
+  rr(slX, slY, fillW, slH, 4); ctx.fill()
+  // Slider knob
+  var knobX = slX + fillW
+  ctx.beginPath(); ctx.arc(knobX, slY + slH / 2, 10, 0, Math.PI * 2)
+  ctx.fillStyle = '#fff'; ctx.fill()
+  ctx.strokeStyle = t.accent || '#ffd700'; ctx.lineWidth = 2; ctx.stroke()
+  // Percentage
+  ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'right'
+  ctx.fillText(Math.round(volumeLevel * 100) + '%', px + pw - 20, py + 55)
+
+  // Mute checkbox
+  var cbX = px + 20, cbY = py + 100, cbS = 20
+  ctx.fillStyle = t.btnS || '#333'
+  rr(cbX, cbY, cbS, cbS, 4); ctx.fill()
+  if (soundMuted) {
+    ctx.fillStyle = t.accent || '#ffd700'
+    rr(cbX + 2, cbY + 2, cbS - 4, cbS - 4, 3); ctx.fill()
+    // Checkmark
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5
+    ctx.beginPath()
+    ctx.moveTo(cbX + 5, cbY + 10); ctx.lineTo(cbX + 9, cbY + 15); ctx.lineTo(cbX + 16, cbY + 5)
+    ctx.stroke()
+  }
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'left'
+  ctx.fillText('\uD83D\uDD07 \u975C\u97F3', cbX + cbS + 10, cbY + 4)
+
+  // Continue button
+  var btnW = pw - 40, btnH = 44
+  var btn1Y = py + 140
+  drawBtn(px + 20, btn1Y, btnW, btnH, t.accent || '#ffd700', 10)
+  ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u25B6 \u7E7C\u7E8C\u904A\u6232', W / 2, btn1Y + btnH / 2)
+
+  // Exit button
+  var btn2Y = py + 196
+  drawBtn(px + 20, btn2Y, btnW, btnH, '#e74c3c', 10)
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\uD83D\uDEAA \u9000\u51FA\u904A\u6232', W / 2, btn2Y + btnH / 2)
+
+  // Close X — top right
+  ctx.fillStyle = t.textDim; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u2715', px + pw - 20, py + 14)
+}
+
+// ===== EXIT CONFIRM PANEL =====
+function drawExitConfirm(t) {
+  if (!showExitConfirm) return
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H)
+
+  var pw = Math.min(260, W - 60), ph = 170
+  var px = W / 2 - pw / 2, py = H / 2 - ph / 2
+
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 16
+  ctx.fillStyle = t.board || '#1a1a2e'
+  rr(px, py, pw, ph, 14); ctx.fill()
+  ctx.shadowBlur = 0
+  ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5
+  rr(px, py, pw, ph, 14); ctx.stroke()
+  ctx.restore()
+
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 16px Arial'
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('\u78BA\u5B9A\u9000\u51FA\u904A\u6232\uFF1F', W / 2, py + 40)
+  ctx.fillStyle = t.textDim; ctx.font = '12px Arial'
+  ctx.fillText('\u7576\u524D\u9032\u5EA6\u5C07\u4E0D\u4FDD\u5B58', W / 2, py + 65)
+
+  // Confirm exit
+  var btnW = (pw - 50) / 2, btnH = 40
+  var btn1X = px + 15, btn2X = px + pw - btnW - 15, btnY = py + ph - 58
+  drawBtn(btn1X, btnY, btnW, btnH, '#e74c3c', 8)
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u78BA\u5B9A\u9000\u51FA', btn1X + btnW / 2, btnY + btnH / 2)
+
+  drawBtn(btn2X, btnY, btnW, btnH, t.btnS || '#333', 8)
+  ctx.fillStyle = t.text || '#fff'
+  ctx.fillText('\u53D6\u6D88', btn2X + btnW / 2, btnY + btnH / 2)
 }
 
 // ===== TOASTS =====

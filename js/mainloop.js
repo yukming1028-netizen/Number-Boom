@@ -12,6 +12,8 @@ function drawAll() {
 
   particles.update()
   particles.draw(ctx)
+  drawSettingsPanel(t)
+  drawExitConfirm(t)
   drawToasts(t)
   if (autoPlaying && frameCount % 1 === 0) autoStep()
   frameCount++

@@ -87,6 +87,11 @@ const S={
     this._s('streak',{count,lastDate:today})
     return count
   },
+  // Volume & mute
+  getVolume(){return this._g('volume')!=null?this._g('volume'):0.5},
+  setVolume(v){this._s('volume',v)},
+  getMuted(){return this._g('muted')||false},
+  setMuted(m){this._s('muted',m)},
   // Test: refresh daily challenge to a random different one
   refreshDaily(){
     const today=new Date().toISOString().slice(0,10)
