@@ -568,63 +568,179 @@ function drawSvgIcon(cx, cy, size, type, color) {
 }
 
 // ===== MENU COVER ART =====
-// Pre-seeded cover tiles (a dramatic merge scene)
-var _coverSeed = 42
-function _coverRand() { _coverSeed = (_coverSeed * 16807 + 7) % 2147483647; return _coverSeed / 2147483647 }
+// Cover state: auto-drop simulation
+var _coverState = null
+
+function _coverReset() {
+  // Fixed drop sequence to form a diamond/cross pattern after merges
+  _coverState = {
+    board: [],     // 5x5, 0=empty
+    drops: [],     // queued drops: {col, val, delay}
+    merges: [],    // active merge flashes: {r, c, frame, maxFrame}
+    phase: 'drop', // drop | settle | done
+    frame: 0,
+    settleTimer: 0,
+  }
+  for (var r = 0; r < 5; r++) {
+    _coverState.board[r] = [0, 0, 0, 0, 0]
+  }
+  // Drop sequence: pairs that merge into a diamond shape
+  // Target pattern (after all merges):
+  //   . 6 . 6 .
+  //   3 . 8 . 3
+  //   . 5 9 5 .
+  //   3 . 8 . 3
+  //   . 6 . 6 .
+  // Drops come in pairs: each pair merges into next level
+  var seq = [
+    // Phase 1: fill corners with 1s → merge to 2
+    {col:1, val:1, d:0}, {col:1, val:1, d:8},
+    {col:3, val:1, d:16}, {col:3, val:1, d:24},
+    {col:1, val:1, d:32}, {col:1, val:1, d:40},
+    {col:3, val:1, d:48}, {col:3, val:1, d:56},
+    // Phase 2: fill edges with 2s → merge to 3
+    {col:0, val:2, d:70}, {col:0, val:2, d:78},
+    {col:4, val:2, d:86}, {col:4, val:2, d:94},
+    {col:0, val:2, d:102}, {col:0, val:2, d:110},
+    {col:4, val:2, d:118}, {col:4, val:2, d:126},
+    // Phase 3: fill center cross with 3→4→5
+    {col:2, val:3, d:140}, {col:2, val:3, d:148},
+    {col:2, val:3, d:156}, {col:2, val:3, d:164},
+    // Phase 4: higher values at key spots
+    {col:1, val:4, d:180}, {col:1, val:4, d:188},
+    {col:3, val:4, d:196}, {col:3, val:4, d:204},
+    {col:2, val:5, d:220}, {col:2, val:5, d:228},
+    {col:1, val:5, d:240}, {col:3, val:5, d:248},
+  ]
+  _coverState.drops = seq
+}
+
+function _coverGravity(board) {
+  // Apply gravity: tiles fall down within each column
+  for (var c = 0; c < 5; c++) {
+    var col = []
+    for (var r = 4; r >= 0; r--) {
+      if (board[r][c] > 0) col.push(board[r][c])
+    }
+    for (var r = 4; r >= 0; r--) {
+      board[r][c] = col.length > 0 ? col.shift() : 0
+    }
+  }
+}
+
+function _coverMerge(board, merges) {
+  // Check for adjacent same-value pairs and merge them (bottom-up priority)
+  var didMerge = true
+  while (didMerge) {
+    didMerge = false
+    for (var r = 4; r >= 0; r--) {
+      for (var c = 0; c < 4; c++) {
+        var v = board[r][c]
+        if (v > 0 && v === board[r][c + 1] && v < 12) {
+          board[r][c] = v + 1
+          board[r][c + 1] = 0
+          merges.push({r: r, c: c, frame: 0, maxFrame: 20})
+          didMerge = true
+        }
+      }
+    }
+    _coverGravity(board)
+  }
+}
 
 function drawCoverArt(t) {
-  var coverX = margin + 4
-  var coverW = W - margin * 2 - 8
-  var coverY = 82
-  var coverH = H - 352 - coverY  // bottom at H-270 (above daily info)
-  if (coverH < 120) return  // too small screen, skip
+  var availY = 82
+  var availH = H - 352 - availY
+  if (availH < 100) return
 
-  // Card background with glow
+  // Grid sizing
+  var gCols = 5, gRows = 5
+  var gGap = 4
+  var maxBoardW = W - margin * 2 - 16
+  var maxBoardH = availH - 16
+  var gCell = Math.min(
+    (maxBoardW - gGap * (gCols - 1)) / gCols,
+    (maxBoardH - gGap * (gRows - 1)) / gRows
+  )
+  gCell = Math.min(gCell, 52) // cap tile size
+  var gW = gCols * gCell + (gCols - 1) * gGap
+  var gH = gRows * gCell + (gRows - 1) * gGap
+  var gX = (W - gW) / 2
+  var gY = availY + (availH - gH) / 2
+
+  // Init cover state
+  if (!_coverState) _coverReset()
+  var cs = _coverState
+  cs.frame++
+
+  // Process drops
+  if (cs.phase === 'drop') {
+    var nextDrops = []
+    for (var i = 0; i < cs.drops.length; i++) {
+      var d = cs.drops[i]
+      if (d.d <= cs.frame) {
+        // Find lowest empty row in column
+        var placed = false
+        for (var r = 4; r >= 0; r--) {
+          if (cs.board[r][d.col] === 0) {
+            cs.board[r][d.col] = d.val
+            placed = true
+            break
+          }
+        }
+        if (placed) {
+          _coverGravity(cs.board)
+          _coverMerge(cs.board, cs.merges)
+        }
+      } else {
+        nextDrops.push(d)
+      }
+    }
+    cs.drops = nextDrops
+    if (cs.drops.length === 0) {
+      cs.phase = 'settle'
+      cs.settleTimer = 0
+    }
+  }
+
+  // Settle phase: let merges finish, then restart cycle
+  if (cs.phase === 'settle') {
+    cs.settleTimer++
+    if (cs.settleTimer > 120) { // 2 seconds pause then restart
+      _coverReset()
+    }
+  }
+
+  // Draw border tightly around board
+  var bPad = 6
   ctx.save()
-  ctx.shadowColor = t.accent || 'rgba(255,215,0,0.3)'; ctx.shadowBlur = 20
-  ctx.fillStyle = t.board || 'rgba(20,15,40,0.6)'
-  rr(coverX, coverY, coverW, coverH, 16); ctx.fill()
+  ctx.shadowColor = t.accent || 'rgba(255,215,0,0.3)'; ctx.shadowBlur = 16
+  ctx.fillStyle = t.board || 'rgba(20,15,40,0.7)'
+  rr(gX - bPad, gY - bPad, gW + bPad * 2, gH + bPad * 2, 12); ctx.fill()
   ctx.shadowBlur = 0
 
-  // Inner border glow
-  var borderGlow = ctx.createLinearGradient(coverX, coverY, coverX + coverW, coverY + coverH)
+  // Border glow
+  var borderGlow = ctx.createLinearGradient(gX, gY, gX + gW, gY + gH)
   borderGlow.addColorStop(0, (t.accent || '#ffd700'))
-  borderGlow.addColorStop(0.5, 'rgba(255,255,255,0.15)')
+  borderGlow.addColorStop(0.5, 'rgba(255,255,255,0.1)')
   borderGlow.addColorStop(1, (t.accent || '#ffd700'))
-  ctx.strokeStyle = borderGlow; ctx.lineWidth = 2
-  rr(coverX, coverY, coverW, coverH, 16); ctx.stroke()
+  ctx.strokeStyle = borderGlow; ctx.lineWidth = 1.5
+  rr(gX - bPad, gY - bPad, gW + bPad * 2, gH + bPad * 2, 12); ctx.stroke()
   ctx.restore()
 
   // Glass highlight
   ctx.save()
-  ctx.beginPath(); rrPath(coverX, coverY, coverW, coverH * 0.45, 16); ctx.clip()
-  var glassGrad = ctx.createLinearGradient(coverX, coverY, coverX, coverY + coverH * 0.45)
-  glassGrad.addColorStop(0, 'rgba(255,255,255,0.12)')
+  ctx.beginPath()
+  rrPath(gX - bPad, gY - bPad, gW + bPad * 2, (gH + bPad * 2) * 0.4, 12)
+  ctx.clip()
+  var glassGrad = ctx.createLinearGradient(gX, gY - bPad, gX, gY - bPad + (gH + bPad * 2) * 0.4)
+  glassGrad.addColorStop(0, 'rgba(255,255,255,0.1)')
   glassGrad.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = glassGrad; ctx.fillRect(coverX, coverY, coverW, coverH * 0.45)
+  ctx.fillStyle = glassGrad
+  ctx.fillRect(gX - bPad, gY - bPad, gW + bPad * 2, (gH + bPad * 2) * 0.4)
   ctx.restore()
 
-  // Mini 5x5 grid inside the cover
-  var gCols = 5, gRows = 5
-  var gPad = 16, gGap = 4
-  var gCellMaxW = (coverW - gPad * 2 - gGap * (gCols - 1)) / gCols
-  var gCellMaxH = (coverH * 0.65 - gPad * 2 - gGap * (gRows - 1)) / gRows
-  var gCell = Math.min(gCellMaxW, gCellMaxH)
-  var gW = gCols * gCell + (gCols - 1) * gGap
-  var gH = gRows * gCell + (gRows - 1) * gGap
-  var gX = coverX + (coverW - gW) / 2
-  var gY = coverY + (coverH - gH) / 2 - 12
-
-  // Dramatic tile layout (fixed pattern)
-  var tileMap = [
-    [0, 1, 0, 2, 0],
-    [3, 1, 1, 2, 4],
-    [5, 3, 0, 3, 5],
-    [6, 6, 7, 5, 4],
-    [8, 7, 9, 10, 6],
-  ]
-
-  // Animate: subtle pulse on high-value tiles
+  // Draw board cells
   for (var r = 0; r < gRows; r++) {
     for (var c = 0; c < gCols; c++) {
       var cx = gX + c * (gCell + gGap)
@@ -632,12 +748,12 @@ function drawCoverArt(t) {
       // Empty cell bg
       ctx.fillStyle = t.empty || 'rgba(255,255,255,0.06)'
       rr(cx, cy, gCell, gCell, 6); ctx.fill()
-      var v = tileMap[r][c]
+      var v = cs.board[r][c]
       if (v > 0) {
         ctx.save()
-        // Animate special tiles
-        if (v >= 8) {
-          var pulse = 1 + 0.03 * Math.sin(frameCount * 0.05 + r * 2 + c * 3)
+        // Pulse high-value tiles
+        if (v >= 7) {
+          var pulse = 1 + 0.04 * Math.sin(frameCount * 0.06 + r * 2 + c * 3)
           ctx.translate(cx + gCell / 2, cy + gCell / 2)
           ctx.scale(pulse, pulse)
           ctx.translate(-(cx + gCell / 2), -(cy + gCell / 2))
@@ -648,67 +764,60 @@ function drawCoverArt(t) {
     }
   }
 
-  // Merge explosion effect at center (row 2, col 2 area)
-  var expX = gX + 2 * (gCell + gGap) + gCell / 2
-  var expY = gY + 2 * (gCell + gGap) + gCell / 2
-  var expPhase = frameCount * 0.03
-
-  // Radiating rings
-  for (var ring = 0; ring < 3; ring++) {
-    var rr2 = (20 + ring * 14) + Math.sin(expPhase + ring * 1.2) * 6
-    var rAlpha = 0.15 - ring * 0.04
-    ctx.save()
-    ctx.strokeStyle = t.accent || '#ffd700'
-    ctx.globalAlpha = rAlpha
-    ctx.lineWidth = 2
-    ctx.beginPath(); ctx.arc(expX, expY, rr2, 0, Math.PI * 2); ctx.stroke()
-    ctx.restore()
+  // Draw merge flashes
+  var newMerges = []
+  for (var m = 0; m < cs.merges.length; m++) {
+    var mg = cs.merges[m]
+    mg.frame++
+    if (mg.frame < mg.maxFrame) {
+      newMerges.push(mg)
+      var mx = gX + mg.c * (gCell + gGap) + gCell / 2
+      var my = gY + mg.r * (gCell + gGap) + gCell / 2
+      var mp = mg.frame / mg.maxFrame
+      // Expanding ring
+      ctx.save()
+      ctx.globalAlpha = 0.4 * (1 - mp)
+      ctx.strokeStyle = t.accent || '#ffd700'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(mx, my, gCell * 0.3 + mp * gCell * 0.8, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+      // Sparkles
+      for (var sp = 0; sp < 4; sp++) {
+        var sa = Math.PI * 2 * sp / 4 + mp * 2
+        var sd = gCell * 0.2 + mp * gCell * 0.6
+        ctx.save()
+        ctx.globalAlpha = 0.5 * (1 - mp)
+        ctx.fillStyle = '#fff'
+        ctx.beginPath()
+        ctx.arc(mx + Math.cos(sa) * sd, my + Math.sin(sa) * sd, 1.5 * (1 - mp), 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+      }
+    }
   }
+  cs.merges = newMerges
 
-  // Sparkle particles around high-value tiles
-  var sparkles = [
-    {r:4, c:0}, {r:4, c:1}, {r:4, c:2}, {r:4, c:3},
-    {r:3, c:2}, {r:4, c:4}, {r:3, c:0}, {r:3, c:3},
-  ]
-  for (var s = 0; s < sparkles.length; s++) {
-    var sr = sparkles[s].r, sc = sparkles[s].c
-    var sx = gX + sc * (gCell + gGap) + gCell / 2
-    var sy = gY + sr * (gCell + gGap) + gCell / 2
-    var sAngle = frameCount * 0.04 + s * 0.8
-    var sDist = gCell * 0.5 + Math.sin(sAngle) * 3
-    var spx = sx + Math.cos(sAngle) * sDist
-    var spy = sy + Math.sin(sAngle) * sDist
-    var sAlpha = 0.3 + 0.3 * Math.sin(frameCount * 0.06 + s)
-    ctx.save()
-    ctx.globalAlpha = sAlpha
-    ctx.fillStyle = '#fff'
-    ctx.beginPath(); ctx.arc(spx, spy, 1.5, 0, Math.PI * 2); ctx.fill()
-    ctx.restore()
-  }
-
-  // Floating numbers animation
+  // Floating tiles around the board
   var floats = [
-    {text: '1', color: TILE_COLORS[1].bg1, x: 0.15, y: 0.2, speed: 0.012},
-    {text: '2', color: TILE_COLORS[2].bg1, x: 0.82, y: 0.25, speed: 0.015},
-    {text: '5', color: TILE_COLORS[5].bg1, x: 0.1, y: 0.75, speed: 0.01},
-    {text: '8', color: '#FFD700', x: 0.85, y: 0.7, speed: 0.018},
-    {text: '10', color: '#FF6B6B', x: 0.5, y: 0.08, speed: 0.013},
+    {val: 1, x: gX - 28, y: gY + gH * 0.2, spd: 0.014},
+    {val: 3, x: gX + gW + 14, y: gY + gH * 0.15, spd: 0.017},
+    {val: 5, x: gX - 30, y: gY + gH * 0.7, spd: 0.012},
+    {val: 7, x: gX + gW + 16, y: gY + gH * 0.65, spd: 0.019},
+    {val: 2, x: gX + gW * 0.2, y: gY - 24, spd: 0.015},
+    {val: 9, x: gX + gW * 0.75, y: gY + gH + 8, spd: 0.016},
   ]
   for (var f = 0; f < floats.length; f++) {
     var fl = floats[f]
-    var fx = coverX + fl.x * coverW + Math.sin(frameCount * fl.speed + f) * 6
-    var fy = coverY + fl.y * coverH + Math.cos(frameCount * fl.speed * 0.8 + f * 2) * 4
-    var fAlpha = 0.2 + 0.1 * Math.sin(frameCount * 0.03 + f * 1.5)
+    var fx = fl.x + Math.sin(frameCount * fl.spd + f * 1.3) * 5
+    var fy = fl.y + Math.cos(frameCount * fl.spd * 0.7 + f * 2.1) * 4
+    var fAlpha = 0.25 + 0.12 * Math.sin(frameCount * 0.035 + f * 1.7)
+    var fSize = 18
     ctx.save()
     ctx.globalAlpha = fAlpha
-    ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillStyle = fl.color
-    ctx.fillText(fl.text, fx, fy)
+    drawTile(fx, fy, fSize, fSize, fl.val, t, 3, 0, 0)
     ctx.restore()
   }
-
-  // Bottom tagline
-  ctx.font = '11px Arial'; ctx.fillStyle = t.textDim; ctx.textAlign = 'center'
-  ctx.fillText('\u5408\u6210\u65B9\u584A \u00B7 \u9023\u9396\u7206\u70B8 \u00B7 \u6311\u6230\u6975\u9650', coverX + coverW / 2, coverY + coverH - 14)
 }
 
