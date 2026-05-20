@@ -213,9 +213,16 @@ function handleThemeClick(px, py) {
 }
 
 function handleLeaderboardClick(px, py) {
-  if (px >= W / 2 - 80 && px <= W / 2 + 80 && py >= H - 60 && py <= H - 20) {
-    state = 'menu'
+  // Bottom tabs
+  var tabW = (W - margin * 2 - 6) / 2
+  var tabH = 42
+  var tabY = H - 58
+  if (py >= tabY && py <= tabY + tabH) {
+    if (px >= margin && px <= margin + tabW) { lbTab = 'endless'; return }
+    if (px >= margin + tabW + 6 && px <= margin + tabW * 2 + 6) { lbTab = 'daily'; return }
   }
+  // Back — tap title area
+  if (py <= 50) { state = 'menu' }
 }
 
 function pixelToCol(px) {

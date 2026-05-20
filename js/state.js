@@ -19,3 +19,4 @@ let dailyItems = { hammer: 0, swap: 0, lightning: 0 } // 每日挑戰專用道�
 let hoverCol = -1  // 觸控/滑鼠懸停列
 let gameStartTime = 0  // 遊戲開始時間
 let autoItemsUsed = { hammer: 0, swap: 0, lightning: 0 }  // 自動遊玩道具使用統計
+let lbTab = 'endless'  // leaderboard tab: 'endless' | 'daily'

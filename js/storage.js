@@ -56,10 +56,13 @@ const S={
     return d
   },
   saveDaily(d){this._s('daily',d)},
-  // Leaderboard (local)
+  // Leaderboard (local) — one record per mode per player
   getLB(){return this._g('lb')||[]},
   addLB(mode,score,extra){
     const lb=this.getLB()
+    // Replace existing record for same mode (keep latest)
+    const idx=lb.findIndex(e=>e.mode===mode)
+    if(idx>=0) lb.splice(idx,1)
     lb.push({mode,score,...extra,ts:Date.now()})
     lb.sort((a,b)=>b.score-a.score)
     this._s('lb',lb.slice(0,20))
