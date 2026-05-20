@@ -1,0 +1,95 @@
+// ===== DAILY CHALLENGES (tiles cumulative + score) =====
+const TILE_LABELS = {4:'綠',5:'青',6:'藍',7:'紫',8:'金',9:'鑽',10:'虹'}
+
+const DAILY_CHALLENGES = [
+  // --- 合成方塊（累積進度，跨場次）---
+  {type:'tiles',desc:'合成綠色方塊×2',goals:[{value:4,target:2}],cols:3,rows:3},
+  {type:'tiles',desc:'合成青×11 藍×4',goals:[{value:5,target:11},{value:6,target:4}],cols:4,rows:4},
+  {type:'tiles',desc:'合成紫×11 金×4 鑽×2 虹×1',goals:[{value:7,target:11},{value:8,target:4},{value:9,target:2},{value:10,target:1}],cols:5,rows:5},
+  // --- 分數達成 (score) 5×5 ---
+  {type:'score',desc:'達到30000分',target:30000,cols:5,rows:5},
+  {type:'score',desc:'達到40000分',target:40000,cols:5,rows:5},
+  {type:'score',desc:'達到50000分',target:50000,cols:5,rows:5},
+  {type:'score',desc:'達到60000分',target:60000,cols:5,rows:5},
+  {type:'score',desc:'達到70000分',target:70000,cols:5,rows:5},
+  {type:'score',desc:'達到80000分',target:80000,cols:5,rows:5},
+  {type:'score',desc:'達到90000分',target:90000,cols:5,rows:5},
+  {type:'score',desc:'達到100000分',target:100000,cols:5,rows:5},
+]
+
+// ===== STORAGE =====
+const S={
+  _g(k){try{return JSON.parse(localStorage.getItem('nb2_'+k))}catch{return null}},
+  _s(k,v){try{localStorage.setItem('nb2_'+k,JSON.stringify(v))}catch{}},
+  // Items
+  getItems(){return this._g('items')||{hammer:0,swap:0,lightning:0}},
+  saveItems(i){this._s('items',i)},
+  useItem(t){const i=this.getItems();if((i[t]||0)<=0)return false;i[t]--;this.saveItems(i);return true},
+  addItem(t,n){const i=this.getItems();i[t]=(i[t]||0)+n;this.saveItems(i)},
+  // Theme
+  getTheme(){return this._g('theme')||'classic'},
+  setTheme(t){this._s('theme',t)},
+  getUnlockedThemes(){
+    const saved=this._g('unlocked')
+    if(saved&&saved.length===THEMES.length) return saved
+    const all=THEMES.map(t=>t.id)
+    this._s('unlocked',all)
+    return all
+  },
+  unlockTheme(id){const u=this.getUnlockedThemes();if(u.includes(id))return false;u.push(id);this._s('unlocked',u);return true},
+  // Best scores
+  getBestEndless(){return this._g('best_endless')||0},
+  setBestEndless(s){if(s>this.getBestEndless())this._s('best_endless',s)},
+  // Stats
+  getStats(){return this._g('stats')||{gamesPlayed:0,maxTile:0,maxCombo:0,totalRainbows:0}},
+  saveStats(s){this._s('stats',s)},
+  // Daily
+  getDaily(){
+    const today=new Date().toISOString().slice(0,10)
+    const d=this._g('daily')
+    if(!d||d.date!==today){
+      const seed=today.split('-').reduce((a,b)=>a+parseInt(b),0)
+      const challenges=DAILY_CHALLENGES
+      const ch={date:today,challenge:challenges[seed%challenges.length],completed:false,synthCounts:{}}
+      this._s('daily',ch);return ch
+    }
+    return d
+  },
+  saveDaily(d){this._s('daily',d)},
+  // Leaderboard (local)
+  getLB(){return this._g('lb')||[]},
+  addLB(mode,score,extra){
+    const lb=this.getLB()
+    lb.push({mode,score,...extra,ts:Date.now()})
+    lb.sort((a,b)=>b.score-a.score)
+    this._s('lb',lb.slice(0,20))
+  },
+  getDailyStreak(){
+    const d=this._g('streak')||{count:0,lastDate:''}
+    const today=new Date().toISOString().slice(0,10)
+    if(d.lastDate===today) return d.count
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10)
+    if(d.lastDate===yesterday) return d.count
+    return 0
+  },
+  addDailyStreak(){
+    const today=new Date().toISOString().slice(0,10)
+    const d=this._g('streak')||{count:0,lastDate:''}
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10)
+    if(d.lastDate===today) return d.count
+    let count = d.lastDate===yesterday ? d.count+1 : 1
+    this._s('streak',{count,lastDate:today})
+    return count
+  },
+  // Test: refresh daily challenge to a random different one
+  refreshDaily(){
+    const today=new Date().toISOString().slice(0,10)
+    const challenges=DAILY_CHALLENGES
+    const current=this._g('daily')
+    const oldIdx=current?challenges.findIndex(c=>c.desc===(current.challenge||{}).desc):-1
+    let idx
+    do { idx=Math.floor(Math.random()*challenges.length) } while(idx===oldIdx&&challenges.length>1)
+    const ch={date:today,challenge:challenges[idx],completed:false,synthCounts:{}}
+    this._s('daily',ch);return ch
+  },
+}

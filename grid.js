@@ -66,6 +66,8 @@ findGroups() {
   for (let r = 0; r < this.rows; r++) {
     for (let c = 0; c < this.cols; c++) {
       if (this.cells[r][c] === 0 || visited[r][c]) continue
+        // 黑曜石(12)不可合成
+        if (this.cells[r][c] === 12) continue
 
       const value = this.cells[r][c]
       const group = []
@@ -199,29 +201,15 @@ bomb(r, c) {
   return cleared
 }
 
-/** 洗牌 — 隨機打亂所有方塊位置 */
-shuffle() {
-  const values = []
-  const positions = []
-  for (let r = 0; r < this.rows; r++) {
-    for (let c = 0; c < this.cols; c++) {
-      if (this.cells[r][c] > 0) {
-        values.push(this.cells[r][c])
-        positions.push({ r, c })
-      }
-    }
-  }
-  // Fisher-Yates
-  for (let i = values.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [values[i], values[j]] = [values[j], values[i]]
-  }
-  // 先清空再放回
-  for (const p of positions) this.cells[p.r][p.c] = 0
-  for (let i = 0; i < positions.length; i++) {
-    this.cells[positions[i].r][positions[i].c] = values[i]
-  }
-  this.applyGravity()
+/** 交換 — 交換兩個方塊的位置（無重力，不觸發合成） */
+swap(r1, c1, r2, c2) {
+  if (r1 < 0 || r1 >= this.rows || c1 < 0 || c1 >= this.cols) return false
+  if (r2 < 0 || r2 >= this.rows || c2 < 0 || c2 >= this.cols) return false
+  if (this.cells[r1][c1] === 0 && this.cells[r2][c2] === 0) return false
+  const tmp = this.cells[r1][c1]
+  this.cells[r1][c1] = this.cells[r2][c2]
+  this.cells[r2][c2] = tmp
+  return true
 }
   /** 錘子 — 消除選中的一格 */
   hammer(r, c) {

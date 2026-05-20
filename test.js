@@ -104,14 +104,19 @@ g9.expandCol()
 eq(g9.cols, 6, '加列後 cols=6')
 eq(g9.cells[0].length, 6, '每行有 6 cols')
 
-// ===== Shuffle =====
-console.log('\n📋 Shuffle 測試')
+// ===== Swap =====
+console.log('\n📋 Swap 測試')
 const g10 = new Grid(5, 5)
-g10.cells[4][0] = 1; g10.cells[4][1] = 2; g10.cells[4][2] = 3
-g10.shuffle()
-let countAfter = 0
-for (const row of g10.cells) for (const v of row) if (v > 0) countAfter++
-eq(countAfter, 3, 'shuffle 後方塊數量不變')
+g10.cells[4][0] = 1; g10.cells[4][1] = 2
+g10.swap(4, 0, 4, 1)
+eq(g10.cells[4][0], 2, 'swap 後 [4][0] = 2')
+eq(g10.cells[4][1], 1, 'swap 後 [4][1] = 1')
+
+// 黑曜石(12)不可合成
+console.log('\n📋 黑曜石不可合成測試')
+const g11 = new Grid(5, 5)
+g11.cells[4][0] = 12; g11.cells[4][1] = 12; g11.cells[4][2] = 12
+eq(g11.findGroups().length, 0, '3 個黑曜石不相鄰 → 不合成')
 
 // ===== 結果 =====
 console.log(`\n${'='.repeat(40)}`)
