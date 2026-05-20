@@ -55,6 +55,16 @@ function doDrop(col) {
       if (ev.chain > 1) particles.emit(x, y, null, ev.chain + 5)
     }
     if (result.chains >= 3) addToast('\u26A1 ' + result.chains + '\u9023\u64CA\uFF01', '\uD83D\uDCA5')
+    // Achievement checks: combo + merge events
+    checkComboAchievements(result.chains)
+    for (var ei = 0; ei < result.events.length; ei++) {
+      checkMergeAchievements(result.events[ei].newValue)
+    }
+    // Cumulative merge count
+    var cum = S.getCumStats()
+    cum.totalMerges = (cum.totalMerges || 0) + result.events.length
+    S.saveCumStats(cum)
+    checkMergeCountAchievements(cum.totalMerges)
   }
 
   if (newRainbow > prevRainbow) {
@@ -113,13 +123,6 @@ function endGame() {
 
   if (mode === 'endless') {
     S.setBestEndless(score)
-    var unlocked = S.getUnlockedThemes()
-    for (var i = 0; i < THEMES.length; i++) {
-      var th = THEMES[i]
-      if (th.rainbow > 0 && rainbowCount >= th.rainbow && !unlocked.includes(th.id)) {
-        if (S.unlockTheme(th.id)) addToast('\uD83C\uDFA8 \u89E3\u9396\u4E3B\u984C: ' + th.icon + ' ' + th.name + '\uFF01', '\uD83C\uDF89')
-      }
-    }
     S.addLB('endless', score, { rainbow: rainbowCount, maxTile: grid.getMaxValue() })
   }
   if (mode === 'daily') {
@@ -128,6 +131,13 @@ function endGame() {
     for (var k in synthCounts) daily.synthCounts[k] = synthCounts[k]
     S.saveDaily(daily)
   }
+
+  // Cumulative score + achievement checks
+  var cum = S.getCumStats()
+  cum.totalScore = (cum.totalScore || 0) + score
+  S.saveCumStats(cum)
+  checkScoreAchievements(cum.totalScore)
+  checkDailyStreakThemes()
 }
 
 function useItemAction(type) {

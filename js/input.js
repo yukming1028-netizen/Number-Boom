@@ -66,6 +66,7 @@ function handleClick(px, py) {
   if (state === 'playing' || state === 'item_select') { handlePlayClick(px, py); return }
   if (state === 'gameover') { handleGameOverClick(px, py); return }
   if (state === 'themes') { handleThemeClick(px, py); return }
+  if (state === 'achievements') { handleAchievementClick(px, py); return }
   if (state === 'leaderboard') { handleLeaderboardClick(px, py); return }
   if (state === 'auto_summary') { handleAutoSummaryClick(px, py); return }
 }
@@ -80,7 +81,7 @@ function handleMenuClick(px, py) {
     var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 - 25 : 65
     if (py >= iconY0 && py < iconY0 + MI_H) { addToast('\u2699\uFE0F \u8A2D\u5B9A\u5373\u5C07\u63A8\u51FA', '\uD83D\uDEE0\uFE0F'); return }
     if (py >= iconY0 + MI_GAP && py < iconY0 + MI_GAP + MI_H) { state = 'themes'; return }
-    if (py >= iconY0 + MI_GAP * 2 && py < iconY0 + MI_GAP * 2 + MI_H) { addToast('\uD83C\uDFC6 \u6210\u5C31\u5373\u5C07\u63A8\u51FA', '\u2B50'); return }
+    if (py >= iconY0 + MI_GAP * 2 && py < iconY0 + MI_GAP * 2 + MI_H) { state = 'achievements'; return }
     if (py >= iconY0 + MI_GAP * 3 && py < iconY0 + MI_GAP * 3 + MI_H) { state = 'leaderboard'; return }
   }
 
@@ -205,6 +206,13 @@ function handleAutoSummaryClick(px, py) {
   var btnW3 = 160, btnH3 = 42
   if (px >= W / 2 - btnW3 / 2 && px <= W / 2 + btnW3 / 2 && py >= by && py <= by + btnH3) {
     state = 'menu'
+  }
+}
+
+function handleAchievementClick(px, py) {
+  // Back button
+  if (py >= H - 50 && py <= H - 10 && px >= W / 2 - 80 && px <= W / 2 + 80) {
+    state = 'menu'; achScrollY = 0; return
   }
 }
 

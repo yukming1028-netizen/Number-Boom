@@ -391,6 +391,100 @@ function drawAutoSummary(t) {
   ctx.fillText('\u56DE\u83DC\u55AE', W / 2, by + btnH3 / 2)
 }
 
+// ===== ACHIEVEMENT SCREEN =====
+var achScrollY = 0
+function drawAchievements(t) {
+  drawBg(t)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillStyle = t.header; ctx.font = 'bold 20px Arial'
+  ctx.fillText('\uD83C\uDFC6 \u6210\u5C31', W / 2, 30)
+
+  var ach = S.getAchievements()
+  var cum = S.getCumStats()
+  var cardW = W - margin * 2, cardH = 58
+  var startY = 55 - achScrollY
+
+  for (var i = 0; i < ACHIEVEMENTS.length; i++) {
+    var a = ACHIEVEMENTS[i]
+    var cy = startY + i * (cardH + 6)
+    if (cy + cardH < 50 || cy > H - 50) continue
+    var cx = margin
+    var done = !!ach[a.id]
+
+    drawBtn(cx, cy, cardW, cardH, done ? 'rgba(255,215,0,0.15)' : t.btnS, 10)
+
+    // Icon
+    var iconColor = done ? (t.accent || '#ffd700') : t.textDim
+    drawAchievementIcon(cx + 24, cy + cardH / 2, 28, a.icon, iconColor)
+
+    // Text
+    var nameX = cx + 48
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+
+    if (a.hidden && !done) {
+      // Hidden achievement — show ???
+      ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText('???', nameX, cy + 18)
+      ctx.font = '10px Arial'
+      ctx.fillText('\u96B1\u85CF\u6210\u5C31', nameX, cy + 36)
+    } else {
+      var dispName = a.hidden ? a.revealName : a.name
+      var dispDesc = a.hidden ? a.revealDesc : a.desc
+      ctx.font = 'bold 13px Arial'; ctx.fillStyle = done ? (t.accent || '#ffd700') : (t.text || '#fff')
+      ctx.fillText(dispName, nameX, cy + 18)
+      ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText(dispDesc, nameX, cy + 36)
+    }
+
+    // Progress / Reward
+    ctx.textAlign = 'right'
+    if (done) {
+      ctx.font = 'bold 11px Arial'; ctx.fillStyle = t.accent || '#ffd700'
+      ctx.fillText('\u2713 \u5DF2\u9054\u6210', cx + cardW - 10, cy + cardH / 2)
+    } else if (!a.hidden) {
+      // Show progress
+      var prog = getAchievementProgress(a, cum)
+      if (prog) {
+        ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
+        ctx.fillText(prog.text, cx + cardW - 10, cy + cardH / 2 - 8)
+        // Mini progress bar
+        var barW = 50, barH = 4
+        var barX = cx + cardW - 10 - barW, barY = cy + cardH / 2 + 6
+        ctx.fillStyle = t.btnS || '#333'
+        rr(barX, barY, barW, barH, 2); ctx.fill()
+        ctx.fillStyle = t.accent || '#ffd700'
+        rr(barX, barY, barW * Math.min(1, prog.pct), barH, 2); ctx.fill()
+      }
+    }
+  }
+
+  // Back button
+  drawBtn(W / 2 - 80, H - 50, 160, 40, t.btnS, 10)
+  ctx.fillStyle = t.header; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u2190 \u8FD4\u56DE', W / 2, H - 30)
+}
+
+function getAchievementProgress(a, cum) {
+  cum = cum || S.getCumStats()
+  switch(a.id) {
+    case 'score_1k': return { pct: Math.min(1,(cum.totalScore||0)/1000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(1000) }
+    case 'score_10k': return { pct: Math.min(1,(cum.totalScore||0)/10000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(10000) }
+    case 'score_50k': return { pct: Math.min(1,(cum.totalScore||0)/50000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(50000) }
+    case 'score_100k': return { pct: Math.min(1,(cum.totalScore||0)/100000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(100000) }
+    case 'score_500k': return { pct: Math.min(1,(cum.totalScore||0)/500000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(500000) }
+    case 'merge_100': return { pct: Math.min(1,(cum.totalMerges||0)/100), text: (cum.totalMerges||0)+'/100' }
+    case 'merge_500': return { pct: Math.min(1,(cum.totalMerges||0)/500), text: (cum.totalMerges||0)+'/500' }
+    case 'merge_2000': return { pct: Math.min(1,(cum.totalMerges||0)/2000), text: (cum.totalMerges||0)+'/2000' }
+    default: return null
+  }
+}
+
+function fmtNum(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1)+'M'
+  if (n >= 1000) return (n/1000).toFixed(1)+'K'
+  return ''+n
+}
+
 // ===== THEME SCREEN =====
 function drawThemes(t) {
   drawBg(t)
@@ -399,9 +493,24 @@ function drawThemes(t) {
   ctx.fillText('\uD83C\uDFA8 \u9078\u64C7\u4E3B\u984C', W / 2, 30)
 
   var unlocked = S.getUnlockedThemes()
-  var cols = 3, thW = 90, thH = 80, gap = 10
+  var streak = S.getDailyStreak()
+  var cols = 3, thW = 90, thH = 85, gap = 10
   var totalW = cols * thW + (cols - 1) * gap
-  var startX = W / 2 - totalW / 2, startY = 60
+  var startX = W / 2 - totalW / 2, startY = 58
+
+  // Theme unlock conditions
+  var themeConditions = {
+    'ocean': { type: 'streak', target: 5 },
+    'cyber': { type: 'streak', target: 10 },
+    'sunset': { type: 'streak', target: 15 },
+    'forest': { type: 'streak', target: 20 },
+    'kawaii': { type: 'streak', target: 25 },
+    'ink': { type: 'streak', target: 30 },
+    'rainbow': { type: 'ach', name: '\u4EBA\u751F\u662F\u5F69\u8272\u7684' },
+    'white': { type: 'hidden' },
+    'obsidian': { type: 'hidden' },
+    'infinity': { type: 'hidden' },
+  }
 
   for (var i = 0; i < THEMES.length; i++) {
     var th = THEMES[i]
@@ -409,16 +518,54 @@ function drawThemes(t) {
     var x = startX + col * (thW + gap), y = startY + row * (thH + gap)
     var isUnlocked = unlocked.includes(th.id)
     var isActive = S.getTheme() === th.id
+    var cond = themeConditions[th.id]
+
     drawBtn(x, y, thW, thH, isActive ? t.accent : t.btnS, 10)
-    ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = isUnlocked ? th.header : t.textDim
-    ctx.fillText(th.icon, x + thW / 2, y + thH * 0.35)
-    ctx.font = '10px Arial'; ctx.fillStyle = isUnlocked ? (t.text || '#fff') : t.textDim
-    ctx.fillText(isUnlocked ? th.name : '\uD83D\uDD12', x + thW / 2, y + thH * 0.7)
+
+    if (isUnlocked) {
+      ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = th.header
+      ctx.fillText(th.icon, x + thW / 2, y + thH * 0.3)
+      ctx.font = '10px Arial'; ctx.fillStyle = t.text || '#fff'
+      ctx.fillText(th.name, x + thW / 2, y + thH * 0.6)
+    } else if (cond && cond.type === 'hidden') {
+      // Hidden theme — show ???
+      ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+      ctx.fillText('?', x + thW / 2, y + thH * 0.3)
+      ctx.font = '10px Arial'
+      ctx.fillText('???', x + thW / 2, y + thH * 0.6)
+      ctx.font = '8px Arial'
+      ctx.fillText('\u96B1\u85CF', x + thW / 2, y + thH * 0.8)
+    } else if (cond && cond.type === 'streak') {
+      // Streak unlock
+      ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+      ctx.fillText('\uD83D\uDCC5', x + thW / 2, y + thH * 0.25)
+      ctx.font = 'bold 10px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText(cond.target + '\u5929', x + thW / 2, y + thH * 0.5)
+      // Mini progress
+      var prog2 = Math.min(1, streak / cond.target)
+      var pbarW = thW - 16, pbarH = 4
+      var pbarX = x + 8, pbarY = y + thH * 0.68
+      ctx.fillStyle = t.btnS || '#333'
+      rr(pbarX, pbarY, pbarW, pbarH, 2); ctx.fill()
+      ctx.fillStyle = t.accent || '#ffd700'
+      rr(pbarX, pbarY, pbarW * prog2, pbarH, 2); ctx.fill()
+      ctx.font = '8px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText(streak + '/' + cond.target, x + thW / 2, y + thH * 0.88)
+    } else if (cond && cond.type === 'ach') {
+      // Achievement unlock
+      ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+      ctx.fillText('\uD83C\uDFC6', x + thW / 2, y + thH * 0.3)
+      ctx.font = '8px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText(cond.name, x + thW / 2, y + thH * 0.65)
+    } else {
+      ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+      ctx.fillText('\uD83D\uDD12', x + thW / 2, y + thH * 0.4)
+    }
   }
 
-  drawBtn(W / 2 - 80, H - 60, 160, 40, t.btnS, 10)
+  drawBtn(W / 2 - 80, H - 50, 160, 40, t.btnS, 10)
   ctx.fillStyle = t.header; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\u2190 \u8FD4\u56DE', W / 2, H - 40)
+  ctx.fillText('\u2190 \u8FD4\u56DE', W / 2, H - 30)
 }
 
 // ===== LEADERBOARD SCREEN =====

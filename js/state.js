@@ -1,5 +1,5 @@
 // ===== GAME STATE (must be before resizeCanvas) =====
-let state = 'menu'  // menu | playing | item_select | gameover | leaderboard | themes | auto_summary
+let state = 'menu'  // menu | playing | item_select | gameover | leaderboard | themes | achievements | auto_summary
 let mode = 'endless' // daily | endless
 let grid = new Grid(5, 5)
 let score = 0, moves = 0, maxCombo = 0, rainbowCount = 0

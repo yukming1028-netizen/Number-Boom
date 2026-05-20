@@ -8,6 +8,7 @@ function drawAll() {
   else if (state === 'gameover') drawGameOver(t)
   else if (state === 'leaderboard') drawLeaderboard(t)
   else if (state === 'themes') drawThemes(t)
+  else if (state === 'achievements') drawAchievements(t)
   else if (state === 'auto_summary') drawAutoSummary(t)
 
   particles.update()

@@ -92,6 +92,12 @@ const S={
   setVolume(v){this._s('volume',v)},
   getMuted(){return this._g('muted')||false},
   setMuted(m){this._s('muted',m)},
+  // Achievements
+  getAchievements(){return this._g('ach')||{}},
+  saveAchievements(a){this._s('ach',a)},
+  // Cumulative stats for achievement tracking
+  getCumStats(){return this._g('cumStats')||{totalScore:0,totalMerges:0}},
+  saveCumStats(s){this._s('cumStats',s)},
   // Test: refresh daily challenge to a random different one
   refreshDaily(){
     const today=new Date().toISOString().slice(0,10)
