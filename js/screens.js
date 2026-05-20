@@ -11,9 +11,9 @@ function drawMenu(t) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   var titleY = 38
   ctx.save()
-  ctx.font = 'bold 32px Arial'
-  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 12
-  var titleGrad = ctx.createLinearGradient(W / 2 - 90, titleY, W / 2 + 90, titleY)
+  ctx.font = 'bold 48px Arial'
+  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 14
+  var titleGrad = ctx.createLinearGradient(W / 2 - 130, titleY, W / 2 + 130, titleY)
   titleGrad.addColorStop(0, '#FF6B6B')
   titleGrad.addColorStop(0.25, '#FFD32A')
   titleGrad.addColorStop(0.5, '#2ED573')
@@ -419,29 +419,49 @@ function drawLeaderboard(t) {
   ctx.font = '12px Arial'; ctx.fillStyle = t.textDim
   ctx.fillText(pName + ' \u25B8', W / 2, 52)
 
+  // Content area with border
+  var contentX = margin
+  var contentY = 68
+  var contentW = W - margin * 2
+  var contentH = H - 68 - 108 // leave space for tabs + back button
+  // Border
+  ctx.save()
+  ctx.strokeStyle = t.accent || '#ffd700'; ctx.lineWidth = 1.5
+  ctx.globalAlpha = 0.3
+  rr(contentX, contentY, contentW, contentH, 12); ctx.stroke()
+  ctx.restore()
+  // Subtle fill
+  ctx.save()
+  ctx.globalAlpha = 0.08
+  ctx.fillStyle = t.board || 'rgba(20,15,40,0.8)'
+  rr(contentX, contentY, contentW, contentH, 12); ctx.fill()
+  ctx.restore()
+
   // Filter by current tab
   var lb = S.getLB().filter(function(e) { return e.mode === lbTab })
   var maxEntries = 10
 
   if (lb.length === 0) {
-    ctx.font = '14px Arial'; ctx.fillStyle = t.textDim
-    ctx.fillText('\u66AB\u7121\u8A18\u9304', W / 2, H / 2 - 40)
+    ctx.font = '14px Arial'; ctx.fillStyle = t.textDim; ctx.textAlign = 'center'
+    ctx.fillText('\u66AB\u7121\u8A18\u9304', W / 2, contentY + contentH / 2)
   } else {
-    var listY0 = 72
+    var listY0 = contentY + 8
     var rowH = 42
     for (var i = 0; i < Math.min(maxEntries, lb.length); i++) {
       var entry = lb[i]
       var ry = listY0 + i * rowH
+      if (ry + rowH > contentY + contentH - 4) break // clip to content area
+
       // Row background
       if (i === 0) {
         ctx.save(); ctx.globalAlpha = 0.15
         ctx.fillStyle = t.accent || '#ffd700'
-        rr(margin, ry, W - margin * 2, rowH - 4, 8); ctx.fill()
+        rr(contentX + 6, ry, contentW - 12, rowH - 4, 8); ctx.fill()
         ctx.restore()
       } else if (i % 2 === 0) {
         ctx.save(); ctx.globalAlpha = 0.08
         ctx.fillStyle = t.header
-        rr(margin, ry, W - margin * 2, rowH - 4, 8); ctx.fill()
+        rr(contentX + 6, ry, contentW - 12, rowH - 4, 8); ctx.fill()
         ctx.restore()
       }
 
@@ -450,21 +470,21 @@ function drawLeaderboard(t) {
       if (i < 3) {
         var medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49']
         ctx.font = '18px Arial'
-        ctx.fillText(medals[i], margin + 10, ry + rowH / 2 - 2)
+        ctx.fillText(medals[i], contentX + 16, ry + rowH / 2 - 2)
       } else {
         ctx.font = 'bold 14px Arial'; ctx.fillStyle = t.textDim
-        ctx.fillText('' + (i + 1), margin + 14, ry + rowH / 2 - 2)
+        ctx.fillText('' + (i + 1), contentX + 20, ry + rowH / 2 - 2)
       }
 
       // Player name
       var entryName = entry.name || '\u73A9\u5BB6'
       ctx.font = '12px Arial'; ctx.fillStyle = t.text || '#fff'
       ctx.textAlign = 'left'
-      ctx.fillText(entryName, margin + 38, ry + rowH / 2 - 8)
+      ctx.fillText(entryName, contentX + 44, ry + rowH / 2 - 8)
 
       // Score (below name)
       ctx.font = 'bold 14px Arial'; ctx.fillStyle = i === 0 ? (t.accent || '#ffd700') : t.textDim
-      ctx.fillText('' + entry.score, margin + 38, ry + rowH / 2 + 8)
+      ctx.fillText('' + entry.score, contentX + 44, ry + rowH / 2 + 8)
 
       // Extra info (right side)
       ctx.font = '9px Arial'; ctx.fillStyle = t.textDim
@@ -475,26 +495,33 @@ function drawLeaderboard(t) {
         var d = new Date(entry.ts)
         extra += (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes()
       }
-      ctx.fillText(extra, W - margin - 8, ry + rowH / 2 - 2)
+      ctx.fillText(extra, contentX + contentW - 14, ry + rowH / 2 - 2)
     }
   }
 
   // Bottom tabs: 無盡模式 | 每日挑戰
   var tabW = (W - margin * 2 - 6) / 2
-  var tabH = 42
-  var tabY = H - 58
+  var tabH = 38
+  var tabY = H - 98
 
   var endlessActive = lbTab === 'endless'
   drawBtn(margin, tabY, tabW, tabH, endlessActive ? t.btnP : t.btnS, 10)
   ctx.fillStyle = endlessActive ? '#fff' : t.textDim
-  ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillText('\u7121 \u76E1 \u6A21 \u5F0F', margin + tabW / 2, tabY + tabH / 2)
 
   var dailyActive = lbTab === 'daily'
   drawBtn(margin + tabW + 6, tabY, tabW, tabH, dailyActive ? t.btnP : t.btnS, 10)
   ctx.fillStyle = dailyActive ? '#fff' : t.textDim
-  ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'
+  ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'
   ctx.fillText('\u6BCF \u65E5 \u6311 \u6230', margin + tabW + 6 + tabW / 2, tabY + tabH / 2)
+
+  // Back button below tabs
+  var backY = H - 50
+  var backW = W - margin * 2
+  drawBtn(margin, backY, backW, 40, t.btnS, 10)
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u2190 \u8FD4\u56DE', W / 2, backY + 20)
 }
 
 // ===== TOASTS =====

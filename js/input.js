@@ -214,10 +214,16 @@ function handleThemeClick(px, py) {
 }
 
 function handleLeaderboardClick(px, py) {
+  // Back button at bottom
+  var backY = H - 50
+  var backH = 40
+  if (py >= backY && py <= backY + backH) {
+    state = 'menu'; return
+  }
   // Bottom tabs
   var tabW = (W - margin * 2 - 6) / 2
-  var tabH = 42
-  var tabY = H - 58
+  var tabH = 38
+  var tabY = H - 98
   if (py >= tabY && py <= tabY + tabH) {
     if (px >= margin && px <= margin + tabW) { lbTab = 'endless'; return }
     if (px >= margin + tabW + 6 && px <= margin + tabW * 2 + 6) { lbTab = 'daily'; return }
