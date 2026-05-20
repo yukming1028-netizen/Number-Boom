@@ -672,6 +672,27 @@ function _coverBuildDrops(pattern) {
   return drops
 }
 
+function _coverTransitionNext() {
+  // Keep the board visible, just switch pattern and re-drop tiles
+  var lastIdx = _coverState ? _coverState.patIdx : -1
+  var idx
+  do { idx = Math.floor(Math.random() * _coverPatterns.length) } while (idx === lastIdx && _coverPatterns.length > 1)
+  var pat = _coverPatterns[idx]
+
+  _coverState = {
+    patIdx: idx,
+    board: [],  // start empty — tiles drop in fresh
+    drops: _coverBuildDrops(pat),
+    flashes: [],
+    phase: 'build',
+    frame: 0,
+    showTimer: 0,
+  }
+  for (var r = 0; r < 5; r++) {
+    _coverState.board[r] = [0, 0, 0, 0, 0]
+  }
+}
+
 function _coverReset() {
   // Pick random pattern (avoid repeating same)
   var lastIdx = _coverState ? _coverState.patIdx : -1
@@ -741,23 +762,12 @@ function drawCoverArt(t) {
     }
   } else if (cs.phase === 'show') {
     cs.showTimer++
-    if (cs.showTimer > 150) { // ~2.5s display
-      cs.phase = 'fadeout'
-      cs.showTimer = 0
-    }
-  } else if (cs.phase === 'fadeout') {
-    cs.showTimer++
-    if (cs.showTimer > 30) { // fade out over 0.5s
-      _coverReset()
-      return
+    if (cs.showTimer > 150) { // ~2.5s display then transition to next
+      _coverTransitionNext()
     }
   }
 
-  // Global alpha for fadeout
   var globalAlpha = 1
-  if (cs.phase === 'fadeout') {
-    globalAlpha = 1 - cs.showTimer / 30
-  }
 
   // Draw border
   var bPad = 6
