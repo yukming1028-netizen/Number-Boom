@@ -13,7 +13,7 @@ function drawAll() {
   particles.update()
   particles.draw(ctx)
   drawToasts(t)
-  if (autoPlaying && frameCount % 15 === 0) autoStep()
+  if (autoPlaying && frameCount % 1 === 0) autoStep()
   frameCount++
   requestAnimationFrame(drawAll)
 }
