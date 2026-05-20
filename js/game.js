@@ -3,11 +3,12 @@
 function startGame(m) {
   mode = m
   if (m === 'daily') {
-    const daily = S.getDaily()
-    const ch = daily.challenge
-    const cols = ch.cols || 5, rows = ch.rows || 5
+    var daily = S.getDaily()
+    var ch = daily.challenge
+    var cols = ch.cols || 5, rows = ch.rows || 5
     grid = new Grid(cols, rows)
-    synthCounts = { ...(daily.synthCounts || {}) }
+    synthCounts = {}
+    for (var k in (daily.synthCounts || {})) synthCounts[k] = daily.synthCounts[k]
   } else {
     grid = new Grid(5, 5)
     synthCounts = {}
@@ -16,44 +17,49 @@ function startGame(m) {
   currentPiece = randPiece(); nextPiece = randPiece()
   itemSelectType = null; swapFirst = null
   dailyExpandedRow = false; dailyExpandedCol = false
+  hoverCol = -1
+  gameStartTime = Date.now()
+  autoItemsUsed = { hammer: 0, swap: 0, lightning: 0 }
   recalcLayout()
   state = 'playing'
 }
 
 function trackSynthesis(result) {
   if (mode !== 'daily' || !result.events) return
-  for (const ev of result.events) {
+  for (var i = 0; i < result.events.length; i++) {
+    var ev = result.events[i]
     synthCounts[ev.newValue] = (synthCounts[ev.newValue] || 0) + 1
   }
 }
 
 function doDrop(col) {
   if (state !== 'playing') return
-  const row = grid.drop(col, currentPiece)
+  var row = grid.drop(col, currentPiece)
   if (row === -1) return
   moves++
 
-  const prevRainbow = countRainbow()
-  const result = grid.processMerges()
-  const newRainbow = countRainbow()
+  var prevRainbow = countRainbow()
+  var result = grid.processMerges()
+  var newRainbow = countRainbow()
 
   if (result.score > 0) {
     score += result.score
     if (result.chains > maxCombo) maxCombo = result.chains
     trackSynthesis(result)
-    for (const ev of result.events) {
-      const x = boardX + cellGap + ev.anchor.c * (cellW + cellGap) + cellW / 2
-      const y = boardTop + cellGap + ev.anchor.r * (cellH + cellGap) + cellH / 2
+    for (var i = 0; i < result.events.length; i++) {
+      var ev = result.events[i]
+      var x = boardX + cellGap + ev.anchor.c * (cellW + cellGap) + cellW / 2
+      var y = boardTop + cellGap + ev.anchor.r * (cellH + cellGap) + cellH / 2
       particles.emit(x, y, null, ev.newValue)
       if (ev.chain > 1) particles.emit(x, y, null, ev.chain + 5)
     }
-    if (result.chains >= 3) addToast(`⚡ ${result.chains}連擊！`, '💥')
+    if (result.chains >= 3) addToast('\u26A1 ' + result.chains + '\u9023\u64CA\uFF01', '\uD83D\uDCA5')
   }
 
   if (newRainbow > prevRainbow) {
     rainbowCount += (newRainbow - prevRainbow)
-    for (let i = prevRainbow; i < newRainbow; i++) {
-      addToast(`👑 彩虹方塊！(${rainbowCount})`, '🎉')
+    for (var i = prevRainbow; i < newRainbow; i++) {
+      addToast('\uD83D\uDC51 \u5F69\u8679\u65B9\u584A\uFF01(' + rainbowCount + ')', '\uD83C\uDF89')
       particles.emitRainbow(W / 2, H / 2)
     }
   }
@@ -66,36 +72,38 @@ function doDrop(col) {
 }
 
 function countRainbow() {
-  let n = 0
-  for (const row of grid.cells) for (const v of row) if (v === 10) n++
+  var n = 0
+  for (var r = 0; r < grid.rows; r++)
+    for (var c = 0; c < grid.cols; c++)
+      if (grid.cells[r][c] === 10) n++
   return n
 }
 
 function checkDailyComplete() {
-  const daily = S.getDaily()
-  const ch = daily.challenge
-  let passed = false
+  var daily = S.getDaily()
+  var ch = daily.challenge
+  var passed = false
 
   if (ch.type === 'tiles') {
-    passed = ch.goals.every(g => (synthCounts[g.value] || 0) >= g.target)
+    passed = ch.goals.every(function(g) { return (synthCounts[g.value] || 0) >= g.target })
   }
   if (ch.type === 'score' && score >= ch.target) passed = true
 
   if (passed) {
     daily.completed = true
-    daily.synthCounts = { ...synthCounts }
+    daily.synthCounts = {}
+    for (var k in synthCounts) daily.synthCounts[k] = synthCounts[k]
     S.saveDaily(daily)
     S.addDailyStreak()
-    // Reward: each item ×1, once per day
     S.addItem('hammer', 1); S.addItem('swap', 1); S.addItem('lightning', 1)
-    addToast('🎁 通關！每款道具+1', '✅')
+    addToast('\uD83C\uDF81 \u901A\u95DC\uFF01\u6BCF\u6B3E\u9053\u5177+1', '\u2705')
     state = 'gameover'
   }
 }
 
 function endGame() {
   state = 'gameover'
-  const stats = S.getStats()
+  var stats = S.getStats()
   stats.gamesPlayed++
   if (grid.getMaxValue() > stats.maxTile) stats.maxTile = grid.getMaxValue()
   if (maxCombo > stats.maxCombo) stats.maxCombo = maxCombo
@@ -104,17 +112,19 @@ function endGame() {
 
   if (mode === 'endless') {
     S.setBestEndless(score)
-    const unlocked = S.getUnlockedThemes()
-    for (const th of THEMES) {
+    var unlocked = S.getUnlockedThemes()
+    for (var i = 0; i < THEMES.length; i++) {
+      var th = THEMES[i]
       if (th.rainbow > 0 && rainbowCount >= th.rainbow && !unlocked.includes(th.id)) {
-        if (S.unlockTheme(th.id)) addToast(`🎨 解鎖主題: ${th.icon} ${th.name}！`, '🎉')
+        if (S.unlockTheme(th.id)) addToast('\uD83C\uDFA8 \u89E3\u9396\u4E3B\u984C: ' + th.icon + ' ' + th.name + '\uFF01', '\uD83C\uDF89')
       }
     }
     S.addLB('endless', score, { rainbow: rainbowCount, maxTile: grid.getMaxValue() })
   }
   if (mode === 'daily') {
-    const daily = S.getDaily()
-    daily.synthCounts = { ...synthCounts }
+    var daily = S.getDaily()
+    daily.synthCounts = {}
+    for (var k in synthCounts) daily.synthCounts[k] = synthCounts[k]
     S.saveDaily(daily)
   }
 }
@@ -123,73 +133,74 @@ function useItemAction(type) {
   if (type === 'hammer' || type === 'lightning') {
     if (!S.useItem(type)) {
       if (mode === 'daily') { watchAdForItem(type); return }
-      addToast('道具不足！', '❌'); return
+      addToast('\u9053\u5177\u4E0D\u8DB3\uFF01', '\u274C'); return
     }
     itemSelectType = type; swapFirst = null
     state = 'item_select'
   } else if (type === 'swap') {
     if (!S.useItem('swap')) {
       if (mode === 'daily') { watchAdForItem('swap'); return }
-      addToast('道具不足！', '❌'); return
+      addToast('\u9053\u5177\u4E0D\u8DB3\uFF01', '\u274C'); return
     }
     itemSelectType = 'swap'; swapFirst = null
     state = 'item_select'
-    addToast('🔄 選擇第一個方塊', '👆')
+    addToast('\uD83D\uDD04 \u9078\u64C7\u7B2C\u4E00\u500B\u65B9\u584A', '\uD83D\uDC46')
   }
 }
 
 function watchAdForItem(type) {
   S.addItem(type, 1)
-  const icons = { hammer: '🔨', swap: '🔄', lightning: '⚡' }
-  addToast(`📹 獲得${icons[type]}！`, '✅')
+  var icons = { hammer: '\uD83D\uDD28', swap: '\uD83D\uDD04', lightning: '\u26A1' }
+  addToast('\uD83D\uDCFA \u7372\u5F97' + icons[type] + '\uFF01', '\u2705')
 }
 
 function doItemTarget(r, c) {
   if (itemSelectType === 'hammer') {
-    const cleared = grid.hammer(r, c)
+    var cleared = grid.hammer(r, c)
     if (cleared.length > 0) {
-      const x = boardX + cellGap + c * (cellW + cellGap) + cellW / 2
-      const y = boardTop + cellGap + r * (cellH + cellGap) + cellH / 2
+      var x = boardX + cellGap + c * (cellW + cellGap) + cellW / 2
+      var y = boardTop + cellGap + r * (cellH + cellGap) + cellH / 2
       particles.emit(x, y, null, cleared[0].value)
-      addToast('🔨 消除！', '✅')
+      addToast('\uD83D\uDD28 \u6D88\u9664\uFF01', '\u2705')
     }
   } else if (itemSelectType === 'lightning') {
-    const cleared = grid.lightning(r, c)
+    var cleared = grid.lightning(r, c)
     if (cleared.length > 0) {
-      for (const cell of cleared) {
-        const x = boardX + cellGap + cell.c * (cellW + cellGap) + cellW / 2
-        const y = boardTop + cellGap + cell.r * (cellH + cellGap) + cellH / 2
-        particles.emit(x, y, null, cell.value)
+      for (var i = 0; i < cleared.length; i++) {
+        var x = boardX + cellGap + cleared[i].c * (cellW + cellGap) + cellW / 2
+        var y = boardTop + cellGap + cleared[i].r * (cellH + cellGap) + cellH / 2
+        particles.emit(x, y, null, cleared[i].value)
       }
-      addToast(`⚡ 消除 ${cleared.length} 個同色！`, '✅')
+      addToast('\u26A1 \u6D88\u9664 ' + cleared.length + ' \u500B\u540C\u8272\uFF01', '\u2705')
     }
   } else if (itemSelectType === 'swap') {
     if (!swapFirst) {
-      if (grid.cells[r][c] === 0) { addToast('請選擇有方塊的格子', '⚠️'); return }
-      swapFirst = { r, c }
-      addToast('🔄 選擇第二個方塊', '👆')
+      if (grid.cells[r][c] === 0) { addToast('\u8ACB\u9078\u64C7\u6709\u65B9\u584A\u7684\u683C\u5B50', '\u26A0\uFE0F'); return }
+      swapFirst = { r: r, c: c }
+      addToast('\uD83D\uDD04 \u9078\u64C7\u7B2C\u4E8C\u500B\u65B9\u584A', '\uD83D\uDC46')
       return
     } else {
-      if (swapFirst.r === r && swapFirst.c === c) { swapFirst = null; addToast('🔄 請選另一個方塊', '⚠️'); return }
+      if (swapFirst.r === r && swapFirst.c === c) { swapFirst = null; addToast('\uD83D\uDD04 \u8ACB\u9078\u53E6\u4E00\u500B\u65B9\u584A', '\u26A0\uFE0F'); return }
       grid.swap(swapFirst.r, swapFirst.c, r, c)
-      addToast('🔄 交換完成！', '✅')
+      addToast('\uD83D\uDD04 \u4EA4\u63DB\u5B8C\u6210\uFF01', '\u2705')
     }
   }
   itemSelectType = null; swapFirst = null
   state = 'playing'
-  const result = grid.processMerges()
+  var result = grid.processMerges()
   if (result.score > 0) {
     score += result.score
     trackSynthesis(result)
-    for (const ev of result.events) {
-      const x = boardX + cellGap + ev.anchor.c * (cellW + cellGap) + cellW / 2
-      const y = boardTop + cellGap + ev.anchor.r * (cellH + cellGap) + cellH / 2
+    for (var i = 0; i < result.events.length; i++) {
+      var ev = result.events[i]
+      var x = boardX + cellGap + ev.anchor.c * (cellW + cellGap) + cellW / 2
+      var y = boardTop + cellGap + ev.anchor.r * (cellH + cellGap) + cellH / 2
       particles.emit(x, y, null, ev.newValue)
     }
     if (result.chains > maxCombo) maxCombo = result.chains
-    if (result.chains >= 3) addToast(`⚡ ${result.chains}連擊！`, '💥')
-    const newRainbow = countRainbow()
-    if (newRainbow > 0) { rainbowCount += newRainbow; addToast(`👑 彩虹！(${rainbowCount})`, '🎉') }
+    if (result.chains >= 3) addToast('\u26A1 ' + result.chains + '\u9023\u64CA\uFF01', '\uD83D\uDCA5')
+    var newRainbow = countRainbow()
+    if (newRainbow > 0) { rainbowCount += newRainbow; addToast('\uD83D\uDC51 \u5F69\u8679\uFF01(' + rainbowCount + ')', '\uD83C\uDF89') }
   }
   if (mode === 'daily') checkDailyComplete()
   if (grid.isGameOver()) endGame()
@@ -198,16 +209,23 @@ function doItemTarget(r, c) {
 function dailyContinue(what) {
   if (what === 'row' && !dailyExpandedRow) {
     grid.expandRow(); dailyExpandedRow = true
-    addToast('↕️ 棋盤擴展 +1行！', '✅')
+    addToast('\u2195\uFE0F \u68CB\u76E4\u64F4\u5C55 +1\u884C\uFF01', '\u2705')
   } else if (what === 'col' && !dailyExpandedCol) {
     grid.expandCol(); dailyExpandedCol = true
-    addToast('↔️ 棋盤擴展 +1列！', '✅')
+    addToast('\u2194\uFE0F \u68CB\u76E4\u64F4\u5C55 +1\u5217\uFF01', '\u2705')
   }
   recalcLayout()
   state = 'playing'
 }
 
 function addToast(text, icon) {
-  toasts.push({ text, icon, time: Date.now() })
+  toasts.push({ text: text, icon: icon, time: Date.now() })
   if (toasts.length > 3) toasts.shift()
+}
+
+function formatTime(ms) {
+  var s = Math.floor(ms / 1000)
+  var m = Math.floor(s / 60)
+  s = s % 60
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s
 }
