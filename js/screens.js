@@ -11,10 +11,10 @@ function drawMenu(t) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   var titleY = 32
   ctx.save()
-  ctx.font = 'bold 32px Arial'
-  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 12
+  ctx.font = 'bold 38px Arial'
+  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 16
   // Gradient fill for title
-  var titleGrad = ctx.createLinearGradient(W / 2 - 90, titleY, W / 2 + 90, titleY)
+  var titleGrad = ctx.createLinearGradient(W / 2 - 110, titleY, W / 2 + 110, titleY)
   titleGrad.addColorStop(0, '#FF6B6B')
   titleGrad.addColorStop(0.25, '#FFD32A')
   titleGrad.addColorStop(0.5, '#2ED573')
@@ -34,7 +34,7 @@ function drawMenu(t) {
   var iconX = W - MI_W - 4
   var iconTypes = ['gear', 'palette', 'trophy', 'chart']
   var iconLabels = ['\u8A2D\u5B9A', '\u4E3B\u984C', '\u6210\u5C31', '\u6392\u884C']
-  var iconY0 = 65
+  var iconY0 = 90
   for (var i = 0; i < 4; i++) {
     var iy = iconY0 + i * MI_GAP
     drawBtn(iconX, iy, MI_W, MI_H, t.btnS, 10)
