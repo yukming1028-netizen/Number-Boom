@@ -200,9 +200,9 @@ function drawBoard(t) {
 function drawItemBar(t) {
   var items = S.getItems()
   var itemTypes = [
-    { key: 'hammer', icon: 'hammer', count: items.hammer, desc: '\u6D88\u9664\u55AE\u683C' },
-    { key: 'swap', icon: 'swapArrows', count: items.swap, desc: '\u4EA4\u63DB\u4F4D\u7F6E' },
-    { key: 'lightning', icon: 'bolt', count: items.lightning, desc: '\u540C\u8272\u5168\u6D88' },
+    { key: 'hammer', icon: 'hammer', count: items.hammer, desc: '\u6D88\u9664\u55AE\u683C', emoji: '\uD83D\uDD28' },
+    { key: 'swap', icon: 'swapArrows', count: items.swap, desc: '\u4EA4\u63DB\u4F4D\u7F6E', emoji: '\uD83D\uDD04' },
+    { key: 'lightning', icon: 'bolt', count: items.lightning, desc: '\u540C\u8272\u5168\u6D88', emoji: '\u26A1' },
   ]
   var ibGap = 6
   var ibW = (boardW - ibGap * 2) / 3
@@ -215,17 +215,23 @@ function drawItemBar(t) {
     drawBtn(ix, ibY, ibW, ibH, isActive ? (t.accent || '#ffd700') : t.btnS, 8)
 
     // SVG icon
-    drawSvgIcon(ix + ibW / 2, ibY + 15, 20, itemTypes[i].icon, t.header)
+    drawSvgIcon(ix + ibW / 2, ibY + 14, 18, itemTypes[i].icon, t.header)
 
-    // Description
-    ctx.font = '9px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+    // Description — clearer with shadow + larger font
+    ctx.save()
+    ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1
+    ctx.fillStyle = t.text || '#fff'
     ctx.fillText(itemTypes[i].desc, ix + ibW / 2, ibY + 32)
+    ctx.restore()
 
-    // Count
-    ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'
+    // Count — prominent with color
+    ctx.save()
+    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 2
     if (itemTypes[i].count > 0) {
-      ctx.fillStyle = t.text || '#fff'
-      ctx.fillText('\u00D7' + itemTypes[i].count, ix + ibW / 2, ibY + 50)
+      ctx.fillStyle = t.accent || '#ffd700'
+      ctx.fillText(itemTypes[i].emoji + '\u00D7' + itemTypes[i].count, ix + ibW / 2, ibY + 50)
     } else if (mode === 'daily') {
       ctx.fillStyle = '#ffd700'
       ctx.fillText('\uD83D\uDCFA+1', ix + ibW / 2, ibY + 50)
@@ -233,6 +239,7 @@ function drawItemBar(t) {
       ctx.fillStyle = t.textDim
       ctx.fillText('\u00D70', ix + ibW / 2, ibY + 50)
     }
+    ctx.restore()
   }
 }
 
@@ -530,20 +537,36 @@ function drawLeaderboard(t) {
 // ===== TOASTS =====
 function drawToasts(t) {
   var now = Date.now()
-  toasts = toasts.filter(function(to) { return now - to.time < 2000 })
+  toasts = toasts.filter(function(to) { return now - to.time < 2500 })
   for (var i = 0; i < toasts.length; i++) {
     var to = toasts[i]
     var age = now - to.time
-    var alpha = age < 1500 ? 1 : 1 - (age - 1500) / 500
-    ctx.save(); ctx.globalAlpha = alpha
-    ctx.font = '12px Arial'; ctx.textAlign = 'center'
-    ctx.fillStyle = t.overlay || 'rgba(30,20,60,0.88)'
+    var alpha = age < 1800 ? 1 : 1 - (age - 1800) / 700
+    // Slide-in animation
+    var slideP = Math.min(age / 200, 1)
+    var slideY = (1 - slideP) * -20
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'
     var text = to.icon + ' ' + to.text
-    var tw = ctx.measureText(text).width + 16
-    var tx = W / 2 - tw / 2, ty = 80 + i * 22
-    rr(tx, ty, tw, 18, 6); ctx.fill()
-    ctx.fillStyle = t.text || '#fff'
-    ctx.fillText(text, W / 2, ty + 9)
+    var tw = ctx.measureText(text).width + 28
+    var tx = W / 2 - tw / 2, ty = 70 + i * 30 + slideY
+    var th = 24
+    // Card background with gradient
+    var toastGrad = ctx.createLinearGradient(tx, ty, tx, ty + th)
+    toastGrad.addColorStop(0, 'rgba(50,30,80,0.92)')
+    toastGrad.addColorStop(1, 'rgba(30,15,50,0.92)')
+    ctx.fillStyle = toastGrad
+    rr(tx, ty, tw, th, 12); ctx.fill()
+    // Border glow
+    ctx.strokeStyle = t.accent || '#ffd700'; ctx.lineWidth = 1
+    ctx.globalAlpha = alpha * 0.5
+    rr(tx, ty, tw, th, 12); ctx.stroke()
+    // Text
+    ctx.globalAlpha = alpha
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 2
+    ctx.fillStyle = '#fff'
+    ctx.fillText(text, W / 2, ty + th / 2)
     ctx.restore()
   }
 }
