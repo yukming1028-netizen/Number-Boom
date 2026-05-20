@@ -7,12 +7,25 @@ var MI_W = 44, MI_H = 50, MI_GAP = 54
 function drawMenu(t) {
   drawBg(t)
 
-  // Title
+  // Title: 方塊爆爆爆 with gradient + glow
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-  ctx.fillStyle = t.header; ctx.font = 'bold 28px Arial'
-  ctx.fillText('\u6578\u5B57\u5927\u7206\u70B8', W / 2, 45)
+  var titleY = 32
+  ctx.save()
+  ctx.font = 'bold 32px Arial'
+  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 12
+  // Gradient fill for title
+  var titleGrad = ctx.createLinearGradient(W / 2 - 90, titleY, W / 2 + 90, titleY)
+  titleGrad.addColorStop(0, '#FF6B6B')
+  titleGrad.addColorStop(0.25, '#FFD32A')
+  titleGrad.addColorStop(0.5, '#2ED573')
+  titleGrad.addColorStop(0.75, '#18DCFF')
+  titleGrad.addColorStop(1, '#C56CF0')
+  ctx.fillStyle = titleGrad
+  ctx.fillText('\u65B9\u584A\u7206\u7206\u7206', W / 2, titleY)
+  ctx.restore()
+  // Subtitle
   ctx.font = '12px Arial'; ctx.fillStyle = t.textDim
-  ctx.fillText('Number Boom', W / 2, 70)
+  ctx.fillText('Number Boom', W / 2, 58)
 
   // Cover art (center area)
   drawCoverArt(t)
@@ -21,7 +34,7 @@ function drawMenu(t) {
   var iconX = W - MI_W - 4
   var iconTypes = ['gear', 'palette', 'trophy', 'chart']
   var iconLabels = ['\u8A2D\u5B9A', '\u4E3B\u984C', '\u6210\u5C31', '\u6392\u884C']
-  var iconY0 = 10
+  var iconY0 = 65
   for (var i = 0; i < 4; i++) {
     var iy = iconY0 + i * MI_GAP
     drawBtn(iconX, iy, MI_W, MI_H, t.btnS, 10)
