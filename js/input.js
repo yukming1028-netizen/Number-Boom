@@ -221,8 +221,14 @@ function handleLeaderboardClick(px, py) {
     if (px >= margin && px <= margin + tabW) { lbTab = 'endless'; return }
     if (px >= margin + tabW + 6 && px <= margin + tabW * 2 + 6) { lbTab = 'daily'; return }
   }
+  // Edit name — tap name area (y 42-62)
+  if (py >= 42 && py <= 62) {
+    var newName = prompt('\u8F38\u5165\u4F60\u7684\u540D\u5B57', S.getName())
+    if (newName && newName.trim()) S.setName(newName)
+    return
+  }
   // Back — tap title area
-  if (py <= 50) { state = 'menu' }
+  if (py <= 40) { state = 'menu' }
 }
 
 function pixelToCol(px) {
