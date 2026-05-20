@@ -7,21 +7,44 @@ var MI_W = 44, MI_H = 50, MI_GAP = 54
 function drawMenu(t) {
   drawBg(t)
 
-  // Title: 方塊爆爆爆 with gradient + glow
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  // Title: 方塊(彩色) 爆(白) 爆(黑曜石)
+  ctx.textBaseline = 'middle'
   var titleY = 32
   ctx.save()
   ctx.font = 'bold 38px Arial'
-  ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 16
-  // Gradient fill for title
-  var titleGrad = ctx.createLinearGradient(W / 2 - 110, titleY, W / 2 + 110, titleY)
-  titleGrad.addColorStop(0, '#FF6B6B')
-  titleGrad.addColorStop(0.25, '#FFD32A')
-  titleGrad.addColorStop(0.5, '#2ED573')
-  titleGrad.addColorStop(0.75, '#18DCFF')
-  titleGrad.addColorStop(1, '#C56CF0')
-  ctx.fillStyle = titleGrad
-  ctx.fillText('\u65B9\u584A\u7206\u7206\u7206', W / 2, titleY)
+  ctx.textAlign = 'center'
+  var chars = ['\u65B9', '\u584A', '\u7206', '\u7206']
+  var charColors = [
+    '#FF6B6B',  // 方 - 紅
+    '#18DCFF',  // 塊 - 青
+    '#FFFFFF',  // 爆 - 白
+    '#2C2C2C',  // 爆 - 黑曜石
+  ]
+  // Measure total width
+  var totalW = 0
+  var cw = []
+  for (var ci = 0; ci < chars.length; ci++) {
+    var w = ctx.measureText(chars[ci]).width
+    cw.push(w)
+    totalW += w
+  }
+  var gap = 4
+  totalW += gap * (chars.length - 1)
+  var tx = W / 2 - totalW / 2
+  for (var ci = 0; ci < chars.length; ci++) {
+    // Glow for white char, outline for obsidian
+    if (ci === 2) {
+      ctx.shadowColor = 'rgba(255,255,255,0.6)'; ctx.shadowBlur = 10
+    } else if (ci === 3) {
+      ctx.shadowColor = 'rgba(44,44,44,0.8)'; ctx.shadowBlur = 6
+    } else {
+      ctx.shadowColor = charColors[ci]; ctx.shadowBlur = 8
+    }
+    ctx.fillStyle = charColors[ci]
+    ctx.textAlign = 'left'
+    ctx.fillText(chars[ci], tx, titleY)
+    tx += cw[ci] + gap
+  }
   ctx.restore()
   // Subtitle
   ctx.font = '12px Arial'; ctx.fillStyle = t.textDim
