@@ -11,7 +11,14 @@ canvas.addEventListener('touchmove', function(e) {
   e.preventDefault()
   var touch = e.touches[0]
   var rect = canvas.getBoundingClientRect()
-  hoverCol = pixelToCol(touch.clientX - rect.left)
+  var px = touch.clientX - rect.left
+  var py = touch.clientY - rect.top
+  // Only track hover within board area
+  if (py >= boardTop && py <= boardTop + boardH && px >= boardX && px <= boardX + boardW) {
+    hoverCol = pixelToCol(px)
+  } else {
+    hoverCol = -1
+  }
 }, { passive: false })
 
 canvas.addEventListener('touchend', function(e) {
@@ -25,7 +32,14 @@ canvas.addEventListener('click', function(e) {
 
 canvas.addEventListener('mousemove', function(e) {
   var rect = canvas.getBoundingClientRect()
-  hoverCol = pixelToCol(e.clientX - rect.left)
+  var px = e.clientX - rect.left
+  var py = e.clientY - rect.top
+  // Only track hover within board area
+  if (py >= boardTop && py <= boardTop + boardH && px >= boardX && px <= boardX + boardW) {
+    hoverCol = pixelToCol(px)
+  } else {
+    hoverCol = -1
+  }
 })
 
 canvas.addEventListener('mouseleave', function() {
@@ -37,34 +51,36 @@ function handleClick(px, py) {
   if (state === 'playing' || state === 'item_select') { handlePlayClick(px, py); return }
   if (state === 'gameover') { handleGameOverClick(px, py); return }
   if (state === 'themes') { handleThemeClick(px, py); return }
+  if (state === 'leaderboard') { handleLeaderboardClick(px, py); return }
   if (state === 'auto_summary') { handleAutoSummaryClick(px, py); return }
 }
 
 function handleMenuClick(px, py) {
-  var btnW = 220, btnH = 50, btnX = W / 2 - btnW / 2
+  var btnW = 230, btnX = W / 2 - btnW / 2
 
-  // Right icons
-  var iconX = W - 44, iconS = 36
-  if (px >= iconX && px <= iconX + iconS) {
-    if (py >= 15 && py <= 15 + iconS) { addToast('\u2699\uFE0F \u8A2D\u5B9A\u5373\u5C07\u63A8\u51FA', '\uD83D\uDEE0\uFE0F'); return }
-    if (py >= 58 && py <= 58 + iconS) { state = 'themes'; return }
-    if (py >= 101 && py <= 101 + iconS) { addToast('\uD83C\uDFC6 \u6210\u5C31\u5373\u5C07\u63A8\u51FA', '\u2B50'); return }
+  // Right icons (4: settings, theme, achievement, leaderboard)
+  var iconX = W - MI_W - 4
+  if (px >= iconX && px <= iconX + MI_W) {
+    if (py >= 10 && py < 10 + MI_H) { addToast('\u2699\uFE0F \u8A2D\u5B9A\u5373\u5C07\u63A8\u51FA', '\uD83D\uDEE0\uFE0F'); return }
+    if (py >= 10 + MI_GAP && py < 10 + MI_GAP + MI_H) { state = 'themes'; return }
+    if (py >= 10 + MI_GAP * 2 && py < 10 + MI_GAP * 2 + MI_H) { addToast('\uD83C\uDFC6 \u6210\u5C31\u5373\u5C07\u63A8\u51FA', '\u2B50'); return }
+    if (py >= 10 + MI_GAP * 3 && py < 10 + MI_GAP * 3 + MI_H) { state = 'leaderboard'; return }
   }
 
-  // 📅 每日挑戰
-  var dy = H - 240
-  if (px >= btnX && px <= btnX + btnW && py >= dy && py <= dy + btnH) {
+  // 每日挑戰
+  var dy = H - 252
+  if (px >= btnX && px <= btnX + btnW && py >= dy && py <= dy + 58) {
     startGame('daily'); return
   }
 
-  // 🎮 無盡模式
-  var ey = H - 175
-  if (px >= btnX && px <= btnX + btnW && py >= ey && py <= ey + btnH) {
+  // 無盡模式
+  var ey = H - 182
+  if (px >= btnX && px <= btnX + btnW && py >= ey && py <= ey + 50) {
     startGame('endless'); return
   }
 
   // Test buttons (3 side by side)
-  var testY = H - 110
+  var testY = H - 120
   var tbW = Math.floor((btnW - 8) / 3)
   if (py >= testY && py <= testY + 34) {
     if (px >= btnX && px <= btnX + tbW) {
@@ -80,16 +96,16 @@ function handleMenuClick(px, py) {
 }
 
 function handlePlayClick(px, py) {
-  // Item bar
+  // Item bar — full width layout
   var items = S.getItems()
   var itemKeys = ['hammer', 'swap', 'lightning']
-  var ibW = 50, ibH = 42
-  var totalW = 3 * ibW + 2 * 4
-  var startX = boardX + boardW / 2 - totalW / 2
-  var ibY = boardTop + boardH + 6
+  var ibGap = 6
+  var ibW = (boardW - ibGap * 2) / 3
+  var ibH = 62
+  var ibY = boardTop + boardH + 8
 
   for (var i = 0; i < 3; i++) {
-    var ix = startX + i * (ibW + 4)
+    var ix = boardX + i * (ibW + ibGap)
     if (px >= ix && px <= ix + ibW && py >= ibY && py <= ibY + ibH) {
       if (state === 'item_select') {
         itemSelectType = null; swapFirst = null; state = 'playing'; return
@@ -99,7 +115,7 @@ function handlePlayClick(px, py) {
     }
   }
 
-  // Board click
+  // Board click — must click on actual cell
   if (state === 'item_select') {
     var cell = pixelToCell(px, py)
     if (cell.r >= 0 && cell.r < grid.rows && cell.c >= 0 && cell.c < grid.cols) {
@@ -108,10 +124,12 @@ function handlePlayClick(px, py) {
     return
   }
 
-  // Drop column
-  var col = pixelToCol(px)
-  if (col >= 0 && col < grid.cols) {
-    doDrop(col)
+  // Drop — must click on actual cell within board
+  if (state === 'playing') {
+    var cell = pixelToCell(px, py)
+    if (cell.r >= 0 && cell.r < grid.rows && cell.c >= 0 && cell.c < grid.cols) {
+      doDrop(cell.c)
+    }
   }
 }
 
@@ -126,7 +144,7 @@ function handleGameOverClick(px, py) {
 
   if (mode === 'daily' && !isComplete) {
     cardH = 340; cy = H / 2 - cardH / 2
-    // Ad buttons
+    // Ad buttons (SVG icons)
     var adBtnW = 60, adBtnH = 32
     var adKeys = ['hammer', 'swap', 'lightning']
     var adStartX = W / 2 - (3 * adBtnW + 2 * 6) / 2
@@ -189,6 +207,12 @@ function handleThemeClick(px, py) {
     }
   }
 
+  if (px >= W / 2 - 80 && px <= W / 2 + 80 && py >= H - 60 && py <= H - 20) {
+    state = 'menu'
+  }
+}
+
+function handleLeaderboardClick(px, py) {
   if (px >= W / 2 - 80 && px <= W / 2 + 80 && py >= H - 60 && py <= H - 20) {
     state = 'menu'
   }

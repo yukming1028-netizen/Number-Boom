@@ -478,5 +478,92 @@ function drawTile(x, y, w, h, value, t, radius, cellR, cellC) {
     ctx.restore()
   }
 
-
 }
+
+// ===== SVG ICON DRAWING =====
+function drawSvgIcon(cx, cy, size, type, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1.5, size * 0.07);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  var u = size / 24;
+  switch(type) {
+    case 'gear': {
+      var n = 6, r_out = 10*u, r_in = 7*u;
+      ctx.beginPath();
+      for (var i = 0; i < n; i++) {
+        var a = i * Math.PI*2/n - Math.PI/2;
+        var a2 = a + Math.PI/n;
+        ctx.lineTo(cx + Math.cos(a)*r_out, cy + Math.sin(a)*r_out);
+        ctx.lineTo(cx + Math.cos(a2)*r_in, cy + Math.sin(a2)*r_in);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 3.5*u, 0, Math.PI*2); ctx.stroke();
+      break;
+    }
+    case 'palette': {
+      ctx.beginPath();
+      ctx.ellipse(cx, cy+1*u, 10*u, 7.5*u, -0.15, 0, Math.PI*2);
+      ctx.stroke();
+      var dots = [[-4,-2.5],[1,-4],[4.5,-1.5],[-1.5,3]];
+      for (var d = 0; d < dots.length; d++) {
+        ctx.beginPath();
+        ctx.arc(cx+dots[d][0]*u, cy+dots[d][1]*u, 2*u, 0, Math.PI*2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'trophy': {
+      ctx.beginPath();
+      ctx.moveTo(cx-7*u, cy-9*u);
+      ctx.quadraticCurveTo(cx-7.5*u, cy, cx-2*u, cy+2*u);
+      ctx.lineTo(cx+2*u, cy+2*u);
+      ctx.quadraticCurveTo(cx+7.5*u, cy, cx+7*u, cy-9*u);
+      ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx-8*u, cy-4.5*u, 2.5*u, -1, 1); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx+8*u, cy-4.5*u, 2.5*u, Math.PI-1, Math.PI+1); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx-2*u, cy+2*u); ctx.lineTo(cx-3*u, cy+6*u);
+      ctx.lineTo(cx+3*u, cy+6*u); ctx.lineTo(cx+2*u, cy+2*u); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx-5.5*u, cy+6*u); ctx.lineTo(cx+5.5*u, cy+6*u); ctx.stroke();
+      break;
+    }
+    case 'chart': {
+      var bw = 5*u, heights = [7*u, 11*u, 4.5*u], gap = 3*u;
+      var baseY = cy + 7*u, sx = cx - (bw*3+gap*2)/2;
+      for (var i = 0; i < 3; i++) {
+        var bx = sx + i*(bw+gap);
+        rr(bx, baseY-heights[i], bw, heights[i], 1.5*u); ctx.fill();
+      }
+      break;
+    }
+    case 'hammer': {
+      ctx.beginPath();
+      ctx.moveTo(cx+1*u, cy-1*u); ctx.lineTo(cx+6*u, cy+10*u); ctx.stroke();
+      rr(cx-7*u, cy-8.5*u, 14*u, 7*u, 2*u); ctx.stroke();
+      break;
+    }
+    case 'swapArrows': {
+      ctx.beginPath();
+      ctx.arc(cx, cy-2*u, 7*u, 2.4, 0.7); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx+6*u, cy-8*u); ctx.lineTo(cx+9*u, cy-5*u); ctx.lineTo(cx+5*u, cy-4.5*u); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy+2*u, 7*u, Math.PI+2.4, Math.PI+0.7); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx-6*u, cy+8*u); ctx.lineTo(cx-9*u, cy+5*u); ctx.lineTo(cx-5*u, cy+4.5*u); ctx.stroke();
+      break;
+    }
+    case 'bolt': {
+      ctx.beginPath();
+      ctx.moveTo(cx+1*u, cy-10*u); ctx.lineTo(cx-4*u, cy-1*u); ctx.lineTo(cx, cy-1*u);
+      ctx.lineTo(cx-1*u, cy+10*u); ctx.lineTo(cx+6*u, cy+1*u); ctx.lineTo(cx+2*u, cy+1*u);
+      ctx.closePath(); ctx.fill();
+      break;
+    }
+  }
+  ctx.restore();
+}
+

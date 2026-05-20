@@ -1,5 +1,8 @@
 // ===== SCREENS / DRAWING =====
 
+// ===== MENU CONSTANTS =====
+var MI_W = 44, MI_H = 50, MI_GAP = 54
+
 // ===== MENU SCREEN =====
 function drawMenu(t) {
   drawBg(t)
@@ -7,23 +10,22 @@ function drawMenu(t) {
   // Title
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillStyle = t.header; ctx.font = 'bold 28px Arial'
-  ctx.fillText('\uD83D\uDD25 \u6578\u5B57\u5927\u7206\u70B8', W / 2 - 15, 50)
+  ctx.fillText('\u6578\u5B57\u5927\u7206\u70B8', W / 2, 45)
   ctx.font = '12px Arial'; ctx.fillStyle = t.textDim
-  ctx.fillText('Number Boom', W / 2 - 15, 75)
+  ctx.fillText('Number Boom', W / 2, 70)
 
-  // Right icons: settings, theme, achievement
-  var iconX = W - 44, iconS = 36
-  // ⚙️ Settings
-  drawBtn(iconX, 15, iconS, iconS, t.btnS, 8)
-  ctx.font = '18px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-  ctx.fillStyle = t.header
-  ctx.fillText('\u2699\uFE0F', iconX + iconS / 2, 15 + iconS / 2)
-  // 🎨 Theme
-  drawBtn(iconX, 58, iconS, iconS, t.btnS, 8)
-  ctx.fillText('\uD83C\uDFA8', iconX + iconS / 2, 58 + iconS / 2)
-  // 🏆 Achievement
-  drawBtn(iconX, 101, iconS, iconS, t.btnS, 8)
-  ctx.fillText('\uD83C\uDFC6', iconX + iconS / 2, 101 + iconS / 2)
+  // Right icons: settings, theme, achievement, leaderboard
+  var iconX = W - MI_W - 4
+  var iconTypes = ['gear', 'palette', 'trophy', 'chart']
+  var iconLabels = ['\u8A2D\u5B9A', '\u4E3B\u984C', '\u6210\u5C31', '\u6392\u884C']
+  var iconY0 = 10
+  for (var i = 0; i < 4; i++) {
+    var iy = iconY0 + i * MI_GAP
+    drawBtn(iconX, iy, MI_W, MI_H, t.btnS, 10)
+    drawSvgIcon(iconX + MI_W / 2, iy + 17, 26, iconTypes[i], t.header)
+    ctx.font = '9px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+    ctx.fillText(iconLabels[i], iconX + MI_W / 2, iy + 42)
+  }
 
   // Daily challenge info
   var daily = S.getDaily()
@@ -33,32 +35,36 @@ function drawMenu(t) {
   ctx.fillStyle = t.textDim; ctx.font = '11px Arial'
   var gridLabel = (ch.cols || 5) + '\u00D7' + (ch.rows || 5)
   if (done) {
-    ctx.fillText('\u2705 \u4ECA\u65E5\u5DF2\u5B8C\u6210 | ' + ch.desc + ' | ' + gridLabel, W / 2, H - 270)
-  } else {
-    ctx.fillText(ch.desc + ' | ' + gridLabel, W / 2, H - 270)
+    ctx.fillText('\u2705 \u4ECA\u65E5\u5DF2\u5B8C\u6210', W / 2, H - 278)
   }
 
   // Bottom buttons
-  var btnW = 220, btnH = 50, btnX = W / 2 - btnW / 2
+  var btnW = 230, btnX = W / 2 - btnW / 2
 
-  // 📅 每日挑戰
-  var dy = H - 240
-  drawBtn(btnX, dy, btnW, btnH, done ? t.btnS : t.btnP, 12)
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 17px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\uD83D\uDCC5 \u6BCF\u65E5\u6311\u6230', W / 2, dy + 21)
-  ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
-  ctx.fillText(gridLabel, W / 2, dy + 39)
+  // 每日挑戰 — shows condition on button
+  var dy = H - 252
+  drawBtn(btnX, dy, btnW, 58, done ? t.btnS : t.btnP, 12)
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u6BCF \u65E5 \u6311 \u6230', W / 2, dy + 22)
+  ctx.restore()
+  ctx.font = '10px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.textAlign = 'center'
+  ctx.fillText(ch.desc + ' | ' + gridLabel, W / 2, dy + 44)
 
-  // 🎮 無盡模式
-  var ey = H - 175
-  drawBtn(btnX, ey, btnW, btnH, t.btnP, 12)
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 17px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\uD83C\uDFAE \u7121\u76E1\u6A21\u5F0F', W / 2, ey + 21)
-  ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
-  ctx.fillText('\u6700\u9AD8: ' + S.getBestEndless(), W / 2, ey + 39)
+  // 無盡模式 — beautified text
+  var ey = H - 182
+  drawBtn(btnX, ey, btnW, 50, t.btnP, 12)
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'
+  ctx.fillText('\u7121 \u76E1 \u6A21 \u5F0F', W / 2, ey + 20)
+  ctx.restore()
+  ctx.font = '10px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.textAlign = 'center'
+  ctx.fillText('\u6700\u9AD8: ' + S.getBestEndless(), W / 2, ey + 38)
 
   // Test buttons (3 side by side)
-  var testY = H - 110
+  var testY = H - 120
   var tbW = Math.floor((btnW - 8) / 3)
   drawBtn(btnX, testY, tbW, 34, t.btnS, 8)
   ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'center'
@@ -71,51 +77,62 @@ function drawMenu(t) {
   // Stats
   var stats = S.getStats()
   ctx.font = '10px Arial'; ctx.fillStyle = t.textDim; ctx.textAlign = 'center'
-  ctx.fillText('\u904A\u6232:' + stats.gamesPlayed + ' | \u6700\u5927:' + stats.maxTile + ' | \u9023\u64CA:' + stats.maxCombo + ' | \u5F69\u8679:' + stats.totalRainbows, W / 2, H - 50)
-  ctx.fillText('\u9023\u7E8C\u6BCF\u65E5:' + S.getDailyStreak(), W / 2, H - 32)
+  ctx.fillText('\u904A\u6232:' + stats.gamesPlayed + ' | \u6700\u5927:' + stats.maxTile + ' | \u9023\u64CA:' + stats.maxCombo + ' | \u5F69\u8679:' + stats.totalRainbows, W / 2, H - 65)
+  ctx.fillText('\u9023\u7E8C\u6BCF\u65E5:' + S.getDailyStreak(), W / 2, H - 47)
 }
 
 // ===== GAME SCREEN =====
 function drawGameScreen(t) {
   drawBg(t)
 
-  // Header bar
+  // Header bar — mode + score (left)
   ctx.textAlign = 'left'; ctx.textBaseline = 'top'
   ctx.fillStyle = t.header; ctx.font = 'bold 15px Arial'
   var modeLabel = mode === 'daily' ? '\uD83D\uDCC5\u6BCF\u65E5' : '\uD83C\uDFAE\u7121\u76E1'
   ctx.fillText(modeLabel + '  ' + score, margin + 2, 4)
 
-  // Next piece (small, top right)
-  var npSize = 26, npX = W - margin - npSize, npY = 5
+  // Current piece (big) + Next piece (small) — top right, current LEFT of next
+  var npSize = 24, npGap = 10
+  var npX = W - margin - npSize       // next piece (rightmost)
+  var cpSize = 34
+  var cpX = npX - npGap - cpSize       // current piece (left of next)
+  var pieceY = 8
+
+  // Labels
   ctx.textAlign = 'center'; ctx.fillStyle = t.textDim; ctx.font = '9px Arial'
-  ctx.fillText('\u4E0B\u4E00\u500B', npX + npSize / 2, npY - 1)
-  drawTile(npX, npY + 10, npSize, npSize, nextPiece, t)
+  ctx.fillText('\u7576\u524D', cpX + cpSize / 2, pieceY - 1)
+  ctx.fillText('\u4E0B\u4E00\u500B', npX + npSize / 2, pieceY - 1)
 
-  // Current piece (big, top left beside score)
-  var cpSize = 36, cpX = margin + 2, cpY = 24
-  ctx.textAlign = 'left'; ctx.fillStyle = t.textDim; ctx.font = '9px Arial'
-  ctx.fillText('\u7576\u524D', cpX, cpY - 1)
-  drawTile(cpX + 24, cpY - 2, cpSize, cpSize, currentPiece, t)
+  drawTile(cpX, pieceY + 10, cpSize, cpSize, currentPiece, t)
+  drawTile(npX, pieceY + 13, npSize, npSize, nextPiece, t)
 
-  // Daily progress line
+  // Daily progress — top left, prominent
   if (mode === 'daily') {
     var daily = S.getDaily()
     var ch = daily.challenge
-    ctx.textAlign = 'left'; ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'
+    ctx.font = 'bold 11px Arial'; ctx.fillStyle = t.text || '#fff'
+    var py = 26
     if (ch.type === 'tiles') {
       var prog = ch.goals.map(function(g) {
         var cur = synthCounts[g.value] || 0
         var ok = cur >= g.target
         return (TILE_LABELS[g.value] || g.value) + (ok ? '\u2713' : cur + '/' + g.target)
       }).join(' ')
-      ctx.fillText((ch.cols || 5) + '\u00D7' + (ch.rows || 5) + ' | ' + prog, margin + 2, 62)
+      ctx.fillText((ch.cols || 5) + '\u00D7' + (ch.rows || 5) + ' | ' + prog, margin + 2, py)
     } else {
       var pct = Math.min(100, Math.floor(score / ch.target * 100))
-      ctx.fillText(ch.desc + ' | ' + score + '/' + ch.target + ' (' + pct + '%)', margin + 2, 62)
+      ctx.fillText(ch.desc + ' ' + pct + '%', margin + 2, py)
+      // Progress bar
+      var barX = margin + 2, barY = py + 14, barW = 140, barH = 6
+      ctx.fillStyle = t.btnS
+      rr(barX, barY, barW, barH, 3); ctx.fill()
+      ctx.fillStyle = t.accent || '#ffd700'
+      rr(barX, barY, barW * pct / 100, barH, 3); ctx.fill()
     }
   }
 
-  // Current piece floating above hover column
+  // Current piece floating above hover column (only when hovering board)
   if (hoverCol >= 0 && hoverCol < grid.cols) {
     var hx = boardX + cellGap + hoverCol * (cellW + cellGap)
     var hy = boardTop - cellH * 0.75 - 6
@@ -168,32 +185,38 @@ function drawBoard(t) {
 function drawItemBar(t) {
   var items = S.getItems()
   var itemTypes = [
-    { key: 'hammer', icon: '\uD83D\uDD28', count: items.hammer },
-    { key: 'swap', icon: '\uD83D\uDD04', count: items.swap },
-    { key: 'lightning', icon: '\u26A1', count: items.lightning },
+    { key: 'hammer', icon: 'hammer', count: items.hammer, desc: '\u6D88\u9664\u55AE\u683C' },
+    { key: 'swap', icon: 'swapArrows', count: items.swap, desc: '\u4EA4\u63DB\u4F4D\u7F6E' },
+    { key: 'lightning', icon: 'bolt', count: items.lightning, desc: '\u540C\u8272\u5168\u6D88' },
   ]
-  var ibW = 50, ibH = 42
-  var totalW = 3 * ibW + 2 * 4
-  var startX = boardX + boardW / 2 - totalW / 2
-  var ibY = boardTop + boardH + 6
+  var ibGap = 6
+  var ibW = (boardW - ibGap * 2) / 3
+  var ibH = 62
+  var ibY = boardTop + boardH + 8
 
-  for (var i = 0; i < itemTypes.length; i++) {
-    var ix = startX + i * (ibW + 4)
+  for (var i = 0; i < 3; i++) {
+    var ix = boardX + i * (ibW + ibGap)
     var isActive = itemSelectType === itemTypes[i].key
-    drawBtn(ix, ibY, ibW, ibH, isActive ? t.accent : t.btnS, 8)
-    ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillStyle = t.header
-    ctx.fillText(itemTypes[i].icon, ix + ibW / 2, ibY + ibH * 0.32)
-    ctx.font = 'bold 10px Arial'
+    drawBtn(ix, ibY, ibW, ibH, isActive ? (t.accent || '#ffd700') : t.btnS, 8)
+
+    // SVG icon
+    drawSvgIcon(ix + ibW / 2, ibY + 15, 20, itemTypes[i].icon, t.header)
+
+    // Description
+    ctx.font = '9px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
+    ctx.fillText(itemTypes[i].desc, ix + ibW / 2, ibY + 32)
+
+    // Count
+    ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'
     if (itemTypes[i].count > 0) {
       ctx.fillStyle = t.text || '#fff'
-      ctx.fillText('\u00D7' + itemTypes[i].count, ix + ibW / 2, ibY + ibH * 0.72)
+      ctx.fillText('\u00D7' + itemTypes[i].count, ix + ibW / 2, ibY + 50)
     } else if (mode === 'daily') {
       ctx.fillStyle = '#ffd700'
-      ctx.fillText('\uD83D\uDCFA+1', ix + ibW / 2, ibY + ibH * 0.72)
+      ctx.fillText('\uD83D\uDCFA+1', ix + ibW / 2, ibY + 50)
     } else {
       ctx.fillStyle = t.textDim
-      ctx.fillText('\u00D70', ix + ibW / 2, ibY + ibH * 0.72)
+      ctx.fillText('\u00D70', ix + ibW / 2, ibY + 50)
     }
   }
 }
@@ -247,14 +270,14 @@ function drawGameOver(t) {
       ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
       ctx.fillText('\u770B\u5EE3\u544A\u62FF\u9053\u5177', W / 2, cy + 142)
       var adBtnW = 60, adBtnH = 32
-      var adIcons = [{ key: 'hammer', icon: '\uD83D\uDD28' }, { key: 'swap', icon: '\uD83D\uDD04' }, { key: 'lightning', icon: '\u26A1' }]
+      var adKeys = ['hammer', 'swap', 'lightning']
+      var adIcons = ['hammer', 'swapArrows', 'bolt']
       var adStartX = W / 2 - (3 * adBtnW + 2 * 6) / 2
       var adY = cy + 155
       for (var i = 0; i < 3; i++) {
         var ax = adStartX + i * (adBtnW + 6)
         drawBtn(ax, adY, adBtnW, adBtnH, t.btnS, 8)
-        ctx.fillStyle = t.header; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'
-        ctx.fillText('\uD83D\uDCFA' + adIcons[i].icon, ax + adBtnW / 2, adY + adBtnH / 2)
+        drawSvgIcon(ax + adBtnW / 2, adY + adBtnH / 2, 18, adIcons[i], t.header)
       }
       var by = cy + 200
       var btnW2 = 120, btnH2 = 40
@@ -315,11 +338,22 @@ function drawAutoSummary(t) {
     ctx.fillText(lines[i], W / 2, cy + 105 + i * 24)
   }
 
-  // Items used
+  // Items used — with SVG icons
   ctx.fillStyle = t.textDim; ctx.font = '11px Arial'
   ctx.fillText('\u9053\u5177\u4F7F\u7528', W / 2, cy + 210)
-  ctx.font = '13px Arial'; ctx.fillStyle = t.text || '#fff'
-  ctx.fillText('\uD83D\uDD28 ' + autoItemsUsed.hammer + '   \uD83D\uDD04 ' + autoItemsUsed.swap + '   \u26A1 ' + autoItemsUsed.lightning, W / 2, cy + 232)
+  var itemStats = [
+    { icon: 'hammer', count: autoItemsUsed.hammer },
+    { icon: 'swapArrows', count: autoItemsUsed.swap },
+    { icon: 'bolt', count: autoItemsUsed.lightning },
+  ]
+  var isGap = 70, isW = 40
+  var isX = W / 2 - (3 * isW + 2 * 8) / 2
+  for (var i = 0; i < 3; i++) {
+    var sx = isX + i * (isW + 8)
+    drawSvgIcon(sx + isW / 2, cy + 234, 18, itemStats[i].icon, t.text || '#fff')
+    ctx.font = '12px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'center'
+    ctx.fillText('\u00D7' + itemStats[i].count, sx + isW / 2, cy + 256)
+  }
 
   // Menu button
   var by = cy + 280

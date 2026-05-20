@@ -6,7 +6,7 @@ function recalcLayout() {
   margin = 8
   headerH = 75  // score + current piece + progress
   previewH = 20 // gap above board for floating piece
-  itemBarH = 48; backBtnH = 32; bottomPad = 10
+  itemBarH = 66; backBtnH = 32; bottomPad = 10
   boardTop = headerH + previewH
   boardW = W - margin * 2
   cellGap = 3
