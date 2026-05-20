@@ -401,7 +401,7 @@ function drawAchievements(t) {
 
   var ach = S.getAchievements()
   var cum = S.getCumStats()
-  var cardW = W - margin * 2, cardH = 58
+  var cardW = W - margin * 2, cardH = 62
   var startY = 55 - achScrollY
 
   for (var i = 0; i < ACHIEVEMENTS.length; i++) {
@@ -409,51 +409,84 @@ function drawAchievements(t) {
     var cy = startY + i * (cardH + 6)
     if (cy + cardH < 50 || cy > H - 50) continue
     var cx = margin
-    var done = !!ach[a.id]
 
-    drawBtn(cx, cy, cardW, cardH, done ? 'rgba(255,215,0,0.15)' : t.btnS, 10)
+    if (a.repeatable) {
+      // Repeatable achievement — show tier level + progress
+      var tierKey = a.id === 'cum_score' ? 'scoreTier' : (a.id === 'cum_merge' ? 'mergeTier' : 'comboTier')
+      var curTier = cum[tierKey] || 0
+      drawBtn(cx, cy, cardW, cardH, curTier > 0 ? 'rgba(255,215,0,0.1)' : t.btnS, 10)
 
-    // Icon
-    var iconColor = done ? (t.accent || '#ffd700') : t.textDim
-    drawAchievementIcon(cx + 24, cy + cardH / 2, 28, a.icon, iconColor)
+      // Icon
+      drawAchievementIcon(cx + 24, cy + cardH / 2, 28, a.icon, t.accent || '#ffd700')
 
-    // Text
-    var nameX = cx + 48
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+      // Name + level
+      var nameX = cx + 48
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+      ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'
+      ctx.fillText(a.name + '  Lv.' + curTier, nameX, cy + 16)
 
-    if (a.hidden && !done) {
-      // Hidden achievement — show ???
-      ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.textDim
-      ctx.fillText('???', nameX, cy + 18)
-      ctx.font = '10px Arial'
-      ctx.fillText('\u96B1\u85CF\u6210\u5C31', nameX, cy + 36)
-    } else {
-      var dispName = a.hidden ? a.revealName : a.name
-      var dispDesc = a.hidden ? a.revealDesc : a.desc
-      ctx.font = 'bold 13px Arial'; ctx.fillStyle = done ? (t.accent || '#ffd700') : (t.text || '#fff')
-      ctx.fillText(dispName, nameX, cy + 18)
+      // Desc
       ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
-      ctx.fillText(dispDesc, nameX, cy + 36)
-    }
+      ctx.fillText(a.desc, nameX, cy + 34)
 
-    // Progress / Reward
-    ctx.textAlign = 'right'
-    if (done) {
-      ctx.font = 'bold 11px Arial'; ctx.fillStyle = t.accent || '#ffd700'
-      ctx.fillText('\u2713 \u5DF2\u9054\u6210', cx + cardW - 10, cy + cardH / 2)
-    } else if (!a.hidden) {
-      // Show progress
-      var prog = getAchievementProgress(a, cum)
-      if (prog) {
+      // Progress to next tier
+      var progress = getCumProgress(a, cum)
+      ctx.textAlign = 'right'
+      ctx.font = '9px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText(progress.text, cx + cardW - 10, cy + 16)
+      // Progress bar
+      var barW = 60, barH = 5
+      var barX = cx + cardW - 10 - barW, barY = cy + 32
+      ctx.fillStyle = t.btnS || '#333'
+      rr(barX, barY, barW, barH, 2.5); ctx.fill()
+      ctx.fillStyle = t.accent || '#ffd700'
+      rr(barX, barY, barW * Math.min(1, progress.pct), barH, 2.5); ctx.fill()
+
+      // Reward preview
+      var rw = a.reward
+      var parts = []
+      if (rw.hammer) parts.push('\uD83D\uDD28' + rw.hammer)
+      if (rw.swap) parts.push('\uD83D\uDD04' + rw.swap)
+      if (rw.lightning) parts.push('\u26A1' + rw.lightning)
+      ctx.textAlign = 'left'; ctx.font = '9px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText('\uD83C\uDF81 ' + parts.join(' '), nameX, cy + 50)
+
+    } else {
+      // One-time achievement
+      var done = !!ach[a.id]
+      drawBtn(cx, cy, cardW, cardH, done ? 'rgba(255,215,0,0.15)' : t.btnS, 10)
+
+      var iconColor = done ? (t.accent || '#ffd700') : t.textDim
+      drawAchievementIcon(cx + 24, cy + cardH / 2, 28, a.icon, iconColor)
+
+      var nameX = cx + 48
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+
+      if (a.hidden && !done) {
+        ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.textDim
+        ctx.fillText('???', nameX, cy + 18)
+        ctx.font = '10px Arial'
+        ctx.fillText('\u96B1\u85CF\u6210\u5C31', nameX, cy + 36)
+      } else {
+        var dispName = a.hidden ? a.revealName : a.name
+        var dispDesc = a.hidden ? a.revealDesc : a.desc
+        ctx.font = 'bold 13px Arial'; ctx.fillStyle = done ? (t.accent || '#ffd700') : (t.text || '#fff')
+        ctx.fillText(dispName, nameX, cy + 18)
         ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
-        ctx.fillText(prog.text, cx + cardW - 10, cy + cardH / 2 - 8)
-        // Mini progress bar
-        var barW = 50, barH = 4
-        var barX = cx + cardW - 10 - barW, barY = cy + cardH / 2 + 6
-        ctx.fillStyle = t.btnS || '#333'
-        rr(barX, barY, barW, barH, 2); ctx.fill()
-        ctx.fillStyle = t.accent || '#ffd700'
-        rr(barX, barY, barW * Math.min(1, prog.pct), barH, 2); ctx.fill()
+        ctx.fillText(dispDesc, nameX, cy + 36)
+      }
+
+      // Status
+      ctx.textAlign = 'right'
+      if (done) {
+        ctx.font = 'bold 11px Arial'; ctx.fillStyle = t.accent || '#ffd700'
+        ctx.fillText('\u2713 \u5DF2\u9054\u6210', cx + cardW - 10, cy + cardH / 2)
+      } else if (a.reward && a.reward.type === 'theme') {
+        var thDef = THEMES.find(function(th) { return th.id === a.reward.id })
+        if (thDef) {
+          ctx.font = '10px Arial'; ctx.fillStyle = t.textDim
+          ctx.fillText('\uD83C\uDFA8 ' + thDef.name, cx + cardW - 10, cy + cardH / 2)
+        }
       }
     }
   }
@@ -464,25 +497,34 @@ function drawAchievements(t) {
   ctx.fillText('\u2190 \u8FD4\u56DE', W / 2, H - 30)
 }
 
-function getAchievementProgress(a, cum) {
+function getCumProgress(a, cum) {
   cum = cum || S.getCumStats()
-  switch(a.id) {
-    case 'score_1k': return { pct: Math.min(1,(cum.totalScore||0)/1000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(1000) }
-    case 'score_10k': return { pct: Math.min(1,(cum.totalScore||0)/10000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(10000) }
-    case 'score_50k': return { pct: Math.min(1,(cum.totalScore||0)/50000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(50000) }
-    case 'score_100k': return { pct: Math.min(1,(cum.totalScore||0)/100000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(100000) }
-    case 'score_500k': return { pct: Math.min(1,(cum.totalScore||0)/500000), text: fmtNum(cum.totalScore||0)+'/'+fmtNum(500000) }
-    case 'merge_100': return { pct: Math.min(1,(cum.totalMerges||0)/100), text: (cum.totalMerges||0)+'/100' }
-    case 'merge_500': return { pct: Math.min(1,(cum.totalMerges||0)/500), text: (cum.totalMerges||0)+'/500' }
-    case 'merge_2000': return { pct: Math.min(1,(cum.totalMerges||0)/2000), text: (cum.totalMerges||0)+'/2000' }
-    default: return null
+  if (a.id === 'cum_score') {
+    var total = cum.totalScore || 0
+    var tier = cum.scoreTier || 0
+    var nextAt = (tier + 1) * a.step
+    var cur = total - tier * a.step
+    return { pct: Math.min(1, cur / a.step), text: fmtNum(cur) + '/' + fmtNum(a.step) }
   }
+  if (a.id === 'cum_merge') {
+    var total = cum.totalMerges || 0
+    var tier = cum.mergeTier || 0
+    var cur = total - tier * a.step
+    return { pct: Math.min(1, cur / a.step), text: cur + '/' + a.step }
+  }
+  if (a.id === 'cum_combo') {
+    var total = cum.totalCombos || 0
+    var tier = cum.comboTier || 0
+    var cur = total - tier * a.step
+    return { pct: Math.min(1, cur / a.step), text: cur + '/' + a.step }
+  }
+  return { pct: 0, text: '' }
 }
 
 function fmtNum(n) {
-  if (n >= 1000000) return (n/1000000).toFixed(1)+'M'
-  if (n >= 1000) return (n/1000).toFixed(1)+'K'
-  return ''+n
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n/1000).toFixed(1) + 'K'
+  return '' + n
 }
 
 // ===== THEME SCREEN =====
