@@ -568,83 +568,128 @@ function drawSvgIcon(cx, cy, size, type, color) {
 }
 
 // ===== MENU COVER ART =====
-// Cover state: auto-drop simulation
 var _coverState = null
 
+// Predefined patterns: each is a 5x5 grid (0=empty, 1-10=tile value)
+// Designed to show maximum color variety (1=red,2=orange,3=yellow,4=green,5=cyan,6=blue,7=purple,8=gold,9=diamond,10=rainbow)
+var _coverPatterns = [
+  { // Diamond (菱形)
+    name: 'diamond',
+    map: [
+      [0, 0, 8, 0, 0],
+      [0, 4, 0, 6, 0],
+      [3, 0, 10, 0, 5],
+      [0, 7, 0, 2, 0],
+      [0, 0, 9, 0, 0],
+    ]
+  },
+  { // Heart (心形)
+    name: 'heart',
+    map: [
+      [0, 2, 0, 4, 0],
+      [1, 5, 3, 6, 7],
+      [0, 8, 9, 10, 0],
+      [0, 0, 6, 0, 0],
+      [0, 0, 3, 0, 0],
+    ]
+  },
+  { // Arrow up (箭頭)
+    name: 'arrow',
+    map: [
+      [0, 0, 10, 0, 0],
+      [0, 5, 8, 9, 0],
+      [2, 0, 7, 0, 4],
+      [0, 0, 3, 0, 0],
+      [0, 0, 1, 0, 0],
+    ]
+  },
+  { // X cross
+    name: 'x',
+    map: [
+      [1, 0, 0, 0, 8],
+      [0, 4, 0, 9, 0],
+      [0, 0, 10, 0, 0],
+      [0, 3, 0, 6, 0],
+      [7, 0, 0, 0, 2],
+    ]
+  },
+  { // Spiral (螺旋)
+    name: 'spiral',
+    map: [
+      [1, 2, 3, 4, 5],
+      [0, 0, 0, 0, 6],
+      [0, 9, 10, 0, 7],
+      [0, 8, 0, 0, 8],
+      [0, 7, 6, 5, 9],
+    ]
+  },
+  { // Border frame (邊框)
+    name: 'frame',
+    map: [
+      [1, 2, 3, 4, 5],
+      [10, 0, 0, 0, 6],
+      [9, 0, 0, 0, 7],
+      [8, 0, 0, 0, 8],
+      [7, 6, 5, 4, 9],
+    ]
+  },
+  { // Tower (塔)
+    name: 'tower',
+    map: [
+      [0, 0, 10, 0, 0],
+      [0, 0, 8, 0, 0],
+      [2, 3, 9, 4, 5],
+      [1, 6, 7, 6, 1],
+      [3, 5, 8, 5, 3],
+    ]
+  },
+  { // Checkerboard (棋盤格)
+    name: 'checker',
+    map: [
+      [1, 0, 3, 0, 5],
+      [0, 2, 0, 4, 0],
+      [7, 0, 9, 0, 10],
+      [0, 6, 0, 8, 0],
+      [1, 0, 3, 0, 5],
+    ]
+  },
+]
+
+// Build drop order from a pattern: tiles appear bottom-up, left-to-right for natural feel
+function _coverBuildDrops(pattern) {
+  var drops = []
+  var delay = 0
+  // Bottom rows first, left to right
+  for (var r = 4; r >= 0; r--) {
+    for (var c = 0; c < 5; c++) {
+      var v = pattern.map[r][c]
+      if (v > 0) {
+        drops.push({r: r, c: c, val: v, delay: delay, appeared: false, animY: 0})
+        delay += 4 // stagger by 4 frames each tile
+      }
+    }
+  }
+  return drops
+}
+
 function _coverReset() {
-  // Fixed drop sequence to form a diamond/cross pattern after merges
+  // Pick random pattern (avoid repeating same)
+  var lastIdx = _coverState ? _coverState.patIdx : -1
+  var idx
+  do { idx = Math.floor(Math.random() * _coverPatterns.length) } while (idx === lastIdx && _coverPatterns.length > 1)
+  var pat = _coverPatterns[idx]
+
   _coverState = {
-    board: [],     // 5x5, 0=empty
-    drops: [],     // queued drops: {col, val, delay}
-    merges: [],    // active merge flashes: {r, c, frame, maxFrame}
-    phase: 'drop', // drop | settle | done
+    patIdx: idx,
+    board: [],
+    drops: _coverBuildDrops(pat),
+    flashes: [],   // appear flash effects: {r, c, frame, maxFrame}
+    phase: 'build', // build | show | fadeout
     frame: 0,
-    settleTimer: 0,
+    showTimer: 0,
   }
   for (var r = 0; r < 5; r++) {
     _coverState.board[r] = [0, 0, 0, 0, 0]
-  }
-  // Drop sequence: pairs that merge into a diamond shape
-  // Target pattern (after all merges):
-  //   . 6 . 6 .
-  //   3 . 8 . 3
-  //   . 5 9 5 .
-  //   3 . 8 . 3
-  //   . 6 . 6 .
-  // Drops come in pairs: each pair merges into next level
-  var seq = [
-    // Phase 1: fill corners with 1s → merge to 2
-    {col:1, val:1, d:0}, {col:1, val:1, d:8},
-    {col:3, val:1, d:16}, {col:3, val:1, d:24},
-    {col:1, val:1, d:32}, {col:1, val:1, d:40},
-    {col:3, val:1, d:48}, {col:3, val:1, d:56},
-    // Phase 2: fill edges with 2s → merge to 3
-    {col:0, val:2, d:70}, {col:0, val:2, d:78},
-    {col:4, val:2, d:86}, {col:4, val:2, d:94},
-    {col:0, val:2, d:102}, {col:0, val:2, d:110},
-    {col:4, val:2, d:118}, {col:4, val:2, d:126},
-    // Phase 3: fill center cross with 3→4→5
-    {col:2, val:3, d:140}, {col:2, val:3, d:148},
-    {col:2, val:3, d:156}, {col:2, val:3, d:164},
-    // Phase 4: higher values at key spots
-    {col:1, val:4, d:180}, {col:1, val:4, d:188},
-    {col:3, val:4, d:196}, {col:3, val:4, d:204},
-    {col:2, val:5, d:220}, {col:2, val:5, d:228},
-    {col:1, val:5, d:240}, {col:3, val:5, d:248},
-  ]
-  _coverState.drops = seq
-}
-
-function _coverGravity(board) {
-  // Apply gravity: tiles fall down within each column
-  for (var c = 0; c < 5; c++) {
-    var col = []
-    for (var r = 4; r >= 0; r--) {
-      if (board[r][c] > 0) col.push(board[r][c])
-    }
-    for (var r = 4; r >= 0; r--) {
-      board[r][c] = col.length > 0 ? col.shift() : 0
-    }
-  }
-}
-
-function _coverMerge(board, merges) {
-  // Check for adjacent same-value pairs and merge them (bottom-up priority)
-  var didMerge = true
-  while (didMerge) {
-    didMerge = false
-    for (var r = 4; r >= 0; r--) {
-      for (var c = 0; c < 4; c++) {
-        var v = board[r][c]
-        if (v > 0 && v === board[r][c + 1] && v < 12) {
-          board[r][c] = v + 1
-          board[r][c + 1] = 0
-          merges.push({r: r, c: c, frame: 0, maxFrame: 20})
-          didMerge = true
-        }
-      }
-    }
-    _coverGravity(board)
   }
 }
 
@@ -662,58 +707,62 @@ function drawCoverArt(t) {
     (maxBoardW - gGap * (gCols - 1)) / gCols,
     (maxBoardH - gGap * (gRows - 1)) / gRows
   )
-  gCell = Math.min(gCell, 52) // cap tile size
+  gCell = Math.min(gCell, 52)
   var gW = gCols * gCell + (gCols - 1) * gGap
   var gH = gRows * gCell + (gRows - 1) * gGap
   var gX = (W - gW) / 2
   var gY = availY + (availH - gH) / 2
 
-  // Init cover state
+  // Init
   if (!_coverState) _coverReset()
   var cs = _coverState
   cs.frame++
 
-  // Process drops
-  if (cs.phase === 'drop') {
-    var nextDrops = []
+  // Phase logic
+  if (cs.phase === 'build') {
+    // Process appearing tiles
     for (var i = 0; i < cs.drops.length; i++) {
       var d = cs.drops[i]
-      if (d.d <= cs.frame) {
-        // Find lowest empty row in column
-        var placed = false
-        for (var r = 4; r >= 0; r--) {
-          if (cs.board[r][d.col] === 0) {
-            cs.board[r][d.col] = d.val
-            placed = true
-            break
-          }
-        }
-        if (placed) {
-          _coverGravity(cs.board)
-          _coverMerge(cs.board, cs.merges)
-        }
-      } else {
-        nextDrops.push(d)
+      if (!d.appeared && d.delay <= cs.frame) {
+        d.appeared = true
+        d.animY = -gCell * 1.5 // start above
+        cs.board[d.r][d.c] = d.val
+        cs.flashes.push({r: d.r, c: d.c, frame: 0, maxFrame: 15})
       }
     }
-    cs.drops = nextDrops
-    if (cs.drops.length === 0) {
-      cs.phase = 'settle'
-      cs.settleTimer = 0
+    // Check if all appeared
+    var allDone = true
+    for (var i = 0; i < cs.drops.length; i++) {
+      if (!cs.drops[i].appeared) { allDone = false; break }
     }
-  }
-
-  // Settle phase: let merges finish, then restart cycle
-  if (cs.phase === 'settle') {
-    cs.settleTimer++
-    if (cs.settleTimer > 120) { // 2 seconds pause then restart
+    if (allDone) {
+      cs.phase = 'show'
+      cs.showTimer = 0
+    }
+  } else if (cs.phase === 'show') {
+    cs.showTimer++
+    if (cs.showTimer > 150) { // ~2.5s display
+      cs.phase = 'fadeout'
+      cs.showTimer = 0
+    }
+  } else if (cs.phase === 'fadeout') {
+    cs.showTimer++
+    if (cs.showTimer > 30) { // fade out over 0.5s
       _coverReset()
+      return
     }
   }
 
-  // Draw border tightly around board
+  // Global alpha for fadeout
+  var globalAlpha = 1
+  if (cs.phase === 'fadeout') {
+    globalAlpha = 1 - cs.showTimer / 30
+  }
+
+  // Draw border
   var bPad = 6
   ctx.save()
+  ctx.globalAlpha = globalAlpha
   ctx.shadowColor = t.accent || 'rgba(255,215,0,0.3)'; ctx.shadowBlur = 16
   ctx.fillStyle = t.board || 'rgba(20,15,40,0.7)'
   rr(gX - bPad, gY - bPad, gW + bPad * 2, gH + bPad * 2, 12); ctx.fill()
@@ -730,6 +779,7 @@ function drawCoverArt(t) {
 
   // Glass highlight
   ctx.save()
+  ctx.globalAlpha = globalAlpha
   ctx.beginPath()
   rrPath(gX - bPad, gY - bPad, gW + bPad * 2, (gH + bPad * 2) * 0.4, 12)
   ctx.clip()
@@ -746,77 +796,101 @@ function drawCoverArt(t) {
       var cx = gX + c * (gCell + gGap)
       var cy = gY + r * (gCell + gGap)
       // Empty cell bg
+      ctx.save()
+      ctx.globalAlpha = globalAlpha
       ctx.fillStyle = t.empty || 'rgba(255,255,255,0.06)'
       rr(cx, cy, gCell, gCell, 6); ctx.fill()
+      ctx.restore()
+
       var v = cs.board[r][c]
       if (v > 0) {
-        ctx.save()
-        // Pulse high-value tiles
-        if (v >= 7) {
-          var pulse = 1 + 0.04 * Math.sin(frameCount * 0.06 + r * 2 + c * 3)
-          ctx.translate(cx + gCell / 2, cy + gCell / 2)
-          ctx.scale(pulse, pulse)
-          ctx.translate(-(cx + gCell / 2), -(cy + gCell / 2))
+        // Find the drop for this cell to get drop animation
+        var dropAnim = null
+        for (var di = 0; di < cs.drops.length; di++) {
+          if (cs.drops[di].r === r && cs.drops[di].c === c && cs.drops[di].appeared) {
+            dropAnim = cs.drops[di]
+            break
+          }
         }
-        drawTile(cx, cy, gCell, gCell, v, t, 5, r, c)
+
+        // Drop-in animation: ease from above
+        var drawCy = cy
+        if (dropAnim && dropAnim.animY < 0) {
+          dropAnim.animY += (0 - dropAnim.animY) * 0.2 // ease toward 0
+          if (dropAnim.animY > -0.5) dropAnim.animY = 0
+          drawCy = cy + dropAnim.animY
+        }
+
+        ctx.save()
+        ctx.globalAlpha = globalAlpha
+        // Pulse high-value tiles during show phase
+        if (v >= 7 && cs.phase === 'show') {
+          var pulse = 1 + 0.05 * Math.sin(frameCount * 0.07 + r * 2 + c * 3)
+          ctx.translate(cx + gCell / 2, drawCy + gCell / 2)
+          ctx.scale(pulse, pulse)
+          ctx.translate(-(cx + gCell / 2), -(drawCy + gCell / 2))
+        }
+        drawTile(cx, drawCy, gCell, gCell, v, t, 5, r, c)
         ctx.restore()
       }
     }
   }
 
-  // Draw merge flashes
-  var newMerges = []
-  for (var m = 0; m < cs.merges.length; m++) {
-    var mg = cs.merges[m]
-    mg.frame++
-    if (mg.frame < mg.maxFrame) {
-      newMerges.push(mg)
-      var mx = gX + mg.c * (gCell + gGap) + gCell / 2
-      var my = gY + mg.r * (gCell + gGap) + gCell / 2
-      var mp = mg.frame / mg.maxFrame
-      // Expanding ring
+  // Draw appear flashes
+  var newFlashes = []
+  for (var m = 0; m < cs.flashes.length; m++) {
+    var fl = cs.flashes[m]
+    fl.frame++
+    if (fl.frame < fl.maxFrame) {
+      newFlashes.push(fl)
+      var fx = gX + fl.c * (gCell + gGap) + gCell / 2
+      var fy = gY + fl.r * (gCell + gGap) + gCell / 2
+      var fp = fl.frame / fl.maxFrame
       ctx.save()
-      ctx.globalAlpha = 0.4 * (1 - mp)
+      ctx.globalAlpha = globalAlpha * 0.5 * (1 - fp)
       ctx.strokeStyle = t.accent || '#ffd700'
       ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.arc(mx, my, gCell * 0.3 + mp * gCell * 0.8, 0, Math.PI * 2)
+      ctx.arc(fx, fy, gCell * 0.2 + fp * gCell * 0.9, 0, Math.PI * 2)
       ctx.stroke()
       ctx.restore()
-      // Sparkles
-      for (var sp = 0; sp < 4; sp++) {
-        var sa = Math.PI * 2 * sp / 4 + mp * 2
-        var sd = gCell * 0.2 + mp * gCell * 0.6
+      // Sparkle burst
+      for (var sp = 0; sp < 6; sp++) {
+        var sa = Math.PI * 2 * sp / 6 + fp * 3
+        var sd = gCell * 0.15 + fp * gCell * 0.7
         ctx.save()
-        ctx.globalAlpha = 0.5 * (1 - mp)
+        ctx.globalAlpha = globalAlpha * 0.6 * (1 - fp)
         ctx.fillStyle = '#fff'
         ctx.beginPath()
-        ctx.arc(mx + Math.cos(sa) * sd, my + Math.sin(sa) * sd, 1.5 * (1 - mp), 0, Math.PI * 2)
+        ctx.arc(fx + Math.cos(sa) * sd, fy + Math.sin(sa) * sd, 1.8 * (1 - fp), 0, Math.PI * 2)
         ctx.fill()
         ctx.restore()
       }
     }
   }
-  cs.merges = newMerges
+  cs.flashes = newFlashes
 
-  // Floating tiles around the board
+  // Floating tiles around the board — randomize values each pattern
+  var patColors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  // Use pattern index to shift which values float
+  var baseVal = (cs.patIdx * 3) % 8 + 1
   var floats = [
-    {val: 1, x: gX - 28, y: gY + gH * 0.2, spd: 0.014},
-    {val: 3, x: gX + gW + 14, y: gY + gH * 0.15, spd: 0.017},
-    {val: 5, x: gX - 30, y: gY + gH * 0.7, spd: 0.012},
-    {val: 7, x: gX + gW + 16, y: gY + gH * 0.65, spd: 0.019},
-    {val: 2, x: gX + gW * 0.2, y: gY - 24, spd: 0.015},
-    {val: 9, x: gX + gW * 0.75, y: gY + gH + 8, spd: 0.016},
+    {val: baseVal, x: gX - 28, y: gY + gH * 0.15, spd: 0.014},
+    {val: baseVal + 2 > 10 ? baseVal - 8 : baseVal + 2, x: gX + gW + 14, y: gY + gH * 0.1, spd: 0.017},
+    {val: baseVal + 4 > 10 ? baseVal - 6 : baseVal + 4, x: gX - 30, y: gY + gH * 0.7, spd: 0.012},
+    {val: baseVal + 1 > 10 ? baseVal - 9 : baseVal + 1, x: gX + gW + 16, y: gY + gH * 0.65, spd: 0.019},
+    {val: baseVal + 5 > 10 ? baseVal - 5 : baseVal + 5, x: gX + gW * 0.15, y: gY - 24, spd: 0.015},
+    {val: baseVal + 7 > 10 ? baseVal - 3 : baseVal + 7, x: gX + gW * 0.78, y: gY + gH + 8, spd: 0.016},
   ]
   for (var f = 0; f < floats.length; f++) {
-    var fl = floats[f]
-    var fx = fl.x + Math.sin(frameCount * fl.spd + f * 1.3) * 5
-    var fy = fl.y + Math.cos(frameCount * fl.spd * 0.7 + f * 2.1) * 4
-    var fAlpha = 0.25 + 0.12 * Math.sin(frameCount * 0.035 + f * 1.7)
+    var flt = floats[f]
+    var fxx = flt.x + Math.sin(frameCount * flt.spd + f * 1.3) * 5
+    var fyy = flt.y + Math.cos(frameCount * flt.spd * 0.7 + f * 2.1) * 4
+    var fAlpha = globalAlpha * (0.3 + 0.15 * Math.sin(frameCount * 0.035 + f * 1.7))
     var fSize = 18
     ctx.save()
     ctx.globalAlpha = fAlpha
-    drawTile(fx, fy, fSize, fSize, fl.val, t, 3, 0, 0)
+    drawTile(fxx, fyy, fSize, fSize, flt.val, t, 3, 0, 0)
     ctx.restore()
   }
 }
