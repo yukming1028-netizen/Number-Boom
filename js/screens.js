@@ -641,7 +641,7 @@ function drawExitConfirm(t) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillText('\u78BA\u5B9A\u9000\u51FA\u904A\u6232\uFF1F', W / 2, py + 40)
   ctx.fillStyle = t.textDim; ctx.font = '12px Arial'
-  ctx.fillText('\u7576\u524D\u9032\u5EA6\u5C07\u4E0D\u4FDD\u5B58', W / 2, py + 65)
+  ctx.fillText('\u5C07\u7D50\u7B97\u7576\u524D\u5206\u6578\u8207\u9032\u5EA6', W / 2, py + 65)
 
   // Confirm exit
   var btnW = (pw - 50) / 2, btnH = 40

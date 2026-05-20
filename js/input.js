@@ -305,10 +305,10 @@ function handleExitConfirmClick(px, py) {
   var btnW = (pw - 50) / 2, btnH = 40
   var btn1X = panX + 15, btn2X = panX + pw - btnW - 15, btnY = panY + ph - 58
 
-  // Confirm exit
+  // Confirm exit — settle score and go to gameover
   if (px >= btn1X && px <= btn1X + btnW && py >= btnY && py <= btnY + btnH) {
     showExitConfirm = false; showSettings = false
-    state = 'menu'; return
+    endGame(); return
   }
   // Cancel
   if (px >= btn2X && px <= btn2X + btnW && py >= btnY && py <= btnY + btnH) {
