@@ -567,3 +567,148 @@ function drawSvgIcon(cx, cy, size, type, color) {
   ctx.restore();
 }
 
+// ===== MENU COVER ART =====
+// Pre-seeded cover tiles (a dramatic merge scene)
+var _coverSeed = 42
+function _coverRand() { _coverSeed = (_coverSeed * 16807 + 7) % 2147483647; return _coverSeed / 2147483647 }
+
+function drawCoverArt(t) {
+  var coverX = margin + 4
+  var coverW = W - margin * 2 - 8
+  var coverY = 82
+  var coverH = H - 352 - coverY  // bottom at H-270 (above daily info)
+  if (coverH < 120) return  // too small screen, skip
+
+  // Card background with glow
+  ctx.save()
+  ctx.shadowColor = t.accent || 'rgba(255,215,0,0.3)'; ctx.shadowBlur = 20
+  ctx.fillStyle = t.board || 'rgba(20,15,40,0.6)'
+  rr(coverX, coverY, coverW, coverH, 16); ctx.fill()
+  ctx.shadowBlur = 0
+
+  // Inner border glow
+  var borderGlow = ctx.createLinearGradient(coverX, coverY, coverX + coverW, coverY + coverH)
+  borderGlow.addColorStop(0, (t.accent || '#ffd700'))
+  borderGlow.addColorStop(0.5, 'rgba(255,255,255,0.15)')
+  borderGlow.addColorStop(1, (t.accent || '#ffd700'))
+  ctx.strokeStyle = borderGlow; ctx.lineWidth = 2
+  rr(coverX, coverY, coverW, coverH, 16); ctx.stroke()
+  ctx.restore()
+
+  // Glass highlight
+  ctx.save()
+  ctx.beginPath(); rrPath(coverX, coverY, coverW, coverH * 0.45, 16); ctx.clip()
+  var glassGrad = ctx.createLinearGradient(coverX, coverY, coverX, coverY + coverH * 0.45)
+  glassGrad.addColorStop(0, 'rgba(255,255,255,0.12)')
+  glassGrad.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = glassGrad; ctx.fillRect(coverX, coverY, coverW, coverH * 0.45)
+  ctx.restore()
+
+  // Mini 5x5 grid inside the cover
+  var gCols = 5, gRows = 5
+  var gPad = 16, gGap = 4
+  var gCellMaxW = (coverW - gPad * 2 - gGap * (gCols - 1)) / gCols
+  var gCellMaxH = (coverH * 0.65 - gPad * 2 - gGap * (gRows - 1)) / gRows
+  var gCell = Math.min(gCellMaxW, gCellMaxH)
+  var gW = gCols * gCell + (gCols - 1) * gGap
+  var gH = gRows * gCell + (gRows - 1) * gGap
+  var gX = coverX + (coverW - gW) / 2
+  var gY = coverY + (coverH - gH) / 2 - 12
+
+  // Dramatic tile layout (fixed pattern)
+  var tileMap = [
+    [0, 1, 0, 2, 0],
+    [3, 1, 1, 2, 4],
+    [5, 3, 0, 3, 5],
+    [6, 6, 7, 5, 4],
+    [8, 7, 9, 10, 6],
+  ]
+
+  // Animate: subtle pulse on high-value tiles
+  for (var r = 0; r < gRows; r++) {
+    for (var c = 0; c < gCols; c++) {
+      var cx = gX + c * (gCell + gGap)
+      var cy = gY + r * (gCell + gGap)
+      // Empty cell bg
+      ctx.fillStyle = t.empty || 'rgba(255,255,255,0.06)'
+      rr(cx, cy, gCell, gCell, 6); ctx.fill()
+      var v = tileMap[r][c]
+      if (v > 0) {
+        ctx.save()
+        // Animate special tiles
+        if (v >= 8) {
+          var pulse = 1 + 0.03 * Math.sin(frameCount * 0.05 + r * 2 + c * 3)
+          ctx.translate(cx + gCell / 2, cy + gCell / 2)
+          ctx.scale(pulse, pulse)
+          ctx.translate(-(cx + gCell / 2), -(cy + gCell / 2))
+        }
+        drawTile(cx, cy, gCell, gCell, v, t, 5, r, c)
+        ctx.restore()
+      }
+    }
+  }
+
+  // Merge explosion effect at center (row 2, col 2 area)
+  var expX = gX + 2 * (gCell + gGap) + gCell / 2
+  var expY = gY + 2 * (gCell + gGap) + gCell / 2
+  var expPhase = frameCount * 0.03
+
+  // Radiating rings
+  for (var ring = 0; ring < 3; ring++) {
+    var rr2 = (20 + ring * 14) + Math.sin(expPhase + ring * 1.2) * 6
+    var rAlpha = 0.15 - ring * 0.04
+    ctx.save()
+    ctx.strokeStyle = t.accent || '#ffd700'
+    ctx.globalAlpha = rAlpha
+    ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(expX, expY, rr2, 0, Math.PI * 2); ctx.stroke()
+    ctx.restore()
+  }
+
+  // Sparkle particles around high-value tiles
+  var sparkles = [
+    {r:4, c:0}, {r:4, c:1}, {r:4, c:2}, {r:4, c:3},
+    {r:3, c:2}, {r:4, c:4}, {r:3, c:0}, {r:3, c:3},
+  ]
+  for (var s = 0; s < sparkles.length; s++) {
+    var sr = sparkles[s].r, sc = sparkles[s].c
+    var sx = gX + sc * (gCell + gGap) + gCell / 2
+    var sy = gY + sr * (gCell + gGap) + gCell / 2
+    var sAngle = frameCount * 0.04 + s * 0.8
+    var sDist = gCell * 0.5 + Math.sin(sAngle) * 3
+    var spx = sx + Math.cos(sAngle) * sDist
+    var spy = sy + Math.sin(sAngle) * sDist
+    var sAlpha = 0.3 + 0.3 * Math.sin(frameCount * 0.06 + s)
+    ctx.save()
+    ctx.globalAlpha = sAlpha
+    ctx.fillStyle = '#fff'
+    ctx.beginPath(); ctx.arc(spx, spy, 1.5, 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
+  }
+
+  // Floating numbers animation
+  var floats = [
+    {text: '1', color: TILE_COLORS[1].bg1, x: 0.15, y: 0.2, speed: 0.012},
+    {text: '2', color: TILE_COLORS[2].bg1, x: 0.82, y: 0.25, speed: 0.015},
+    {text: '5', color: TILE_COLORS[5].bg1, x: 0.1, y: 0.75, speed: 0.01},
+    {text: '8', color: '#FFD700', x: 0.85, y: 0.7, speed: 0.018},
+    {text: '10', color: '#FF6B6B', x: 0.5, y: 0.08, speed: 0.013},
+  ]
+  for (var f = 0; f < floats.length; f++) {
+    var fl = floats[f]
+    var fx = coverX + fl.x * coverW + Math.sin(frameCount * fl.speed + f) * 6
+    var fy = coverY + fl.y * coverH + Math.cos(frameCount * fl.speed * 0.8 + f * 2) * 4
+    var fAlpha = 0.2 + 0.1 * Math.sin(frameCount * 0.03 + f * 1.5)
+    ctx.save()
+    ctx.globalAlpha = fAlpha
+    ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = fl.color
+    ctx.fillText(fl.text, fx, fy)
+    ctx.restore()
+  }
+
+  // Bottom tagline
+  ctx.font = '11px Arial'; ctx.fillStyle = t.textDim; ctx.textAlign = 'center'
+  ctx.fillText('\u5408\u6210\u65B9\u584A \u00B7 \u9023\u9396\u7206\u70B8 \u00B7 \u6311\u6230\u6975\u9650', coverX + coverW / 2, coverY + coverH - 14)
+}
+

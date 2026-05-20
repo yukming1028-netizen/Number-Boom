@@ -14,6 +14,9 @@ function drawMenu(t) {
   ctx.font = '12px Arial'; ctx.fillStyle = t.textDim
   ctx.fillText('Number Boom', W / 2, 70)
 
+  // Cover art (center area)
+  drawCoverArt(t)
+
   // Right icons: settings, theme, achievement, leaderboard
   var iconX = W - MI_W - 4
   var iconTypes = ['gear', 'palette', 'trophy', 'chart']
