@@ -733,6 +733,9 @@ function drawCoverArt(t) {
   var gH = gRows * gCell + (gRows - 1) * gGap
   var gX = (W - gW) / 2
   var gY = availY + (availH - gH) / 2
+  // Expose board position for menu icon alignment
+  _coverBoardY = gY
+  _coverBoardH = gH
 
   // Init
   if (!_coverState) _coverReset()

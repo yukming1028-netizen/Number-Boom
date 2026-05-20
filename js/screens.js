@@ -7,9 +7,9 @@ var MI_W = 44, MI_H = 50, MI_GAP = 54
 function drawMenu(t) {
   drawBg(t)
 
-  // Title: 方塊爆爆 — 32px bold + rainbow gradient + accent glow
+  // Title: 方塊爆爆 — 48px bold + rainbow gradient + accent glow
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-  var titleY = 38
+  var titleY = 28
   ctx.save()
   ctx.font = 'bold 48px Arial'
   ctx.shadowColor = t.accent || '#ffd700'; ctx.shadowBlur = 14
@@ -26,11 +26,14 @@ function drawMenu(t) {
   // Cover art (center area)
   drawCoverArt(t)
 
-  // Right icons: settings, theme, achievement, leaderboard
+  // Right icons: vertically centered with cover board
   var iconX = W - MI_W - 4
   var iconTypes = ['gear', 'palette', 'trophy', 'chart']
   var iconLabels = ['\u8A2D\u5B9A', '\u4E3B\u984C', '\u6210\u5C31', '\u6392\u884C']
-  var iconY0 = 90
+  // Center icons vertically within the cover board area
+  var iconTotalH = 4 * MI_H + 3 * (MI_GAP - MI_H) // total span of 4 icons
+  var iconSpan = 3 * MI_GAP + MI_H
+  var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 : 90
   for (var i = 0; i < 4; i++) {
     var iy = iconY0 + i * MI_GAP
     drawBtn(iconX, iy, MI_W, MI_H, t.btnS, 10)
