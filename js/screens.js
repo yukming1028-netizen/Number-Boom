@@ -33,7 +33,7 @@ function drawMenu(t) {
   // Center icons vertically within the cover board area
   var iconTotalH = 4 * MI_H + 3 * (MI_GAP - MI_H) // total span of 4 icons
   var iconSpan = 3 * MI_GAP + MI_H
-  var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 : 90
+  var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 - 10 : 80
   for (var i = 0; i < 4; i++) {
     var iy = iconY0 + i * MI_GAP
     drawBtn(iconX, iy, MI_W, MI_H, t.btnS, 10)
