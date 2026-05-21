@@ -45,8 +45,8 @@ function doDrop(col) {
   var newRainbow = countRainbow()
 
   if (result.score > 0) {
-    // Fever gauge accumulation
-    var feverGain = result.events.length * 3 + result.chains * 5
+    // Fever gauge accumulation (reduced 70%)
+    var feverGain = (result.events.length * 3 + result.chains * 5) * 0.3
     if (!feverActive) {
       feverGauge = Math.min(FEVER_MAX, feverGauge + feverGain)
       if (feverGauge >= FEVER_MAX) {

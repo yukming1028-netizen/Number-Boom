@@ -14,8 +14,8 @@ function stopAutoPlay() {
 // Apply fever score multiplier + gauge accumulation (shared logic)
 function applyFeverScore(result) {
   if (result.score <= 0) return
-  // Fever gauge accumulation
-  var feverGain = result.events.length * 3 + result.chains * 5
+  // Fever gauge accumulation (reduced 70%)
+  var feverGain = (result.events.length * 3 + result.chains * 5) * 0.3
   if (!feverActive) {
     feverGauge = Math.min(FEVER_MAX, feverGauge + feverGain)
     if (feverGauge >= FEVER_MAX) {
@@ -51,7 +51,7 @@ function autoStep() {
 
   var fullness = boardFullness()
 
-  // Only use items when board is getting full (> 75%)
+  // Only use lightning when board is getting full (> 75%)
   if (fullness > 0.75) {
     // Lightning: clear the most abundant tile type (count >= 4)
     var counts = {}
@@ -81,26 +81,6 @@ function autoStep() {
             return
           }
         }
-      }
-    }
-
-    // Hammer: only on very high tiles (>= 10 rainbow) when board is very full
-    if (fullness > 0.85) {
-      var maxR = -1, maxC = -1, maxV = 0
-      for (var r = 0; r < grid.rows; r++) {
-        for (var c = 0; c < grid.cols; c++) {
-          if (grid.cells[r][c] > maxV) { maxV = grid.cells[r][c]; maxR = r; maxC = c }
-        }
-      }
-      if (maxV >= 10 && maxR >= 0) {
-        grid.hammer(maxR, maxC)
-        autoItemsUsed.hammer++
-        var result = grid.processMerges()
-        applyFeverScore(result)
-        trackSynthesis(result)
-        if (mode === 'daily') checkDailyComplete()
-        if (grid.isGameOver()) endGame()
-        return
       }
     }
   }

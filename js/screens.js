@@ -106,17 +106,22 @@ function drawGameScreen(t) {
   var modeLabel = mode === 'daily' ? '\uD83D\uDCC5\u6BCF\u65E5' : '\uD83C\uDFAE\u7121\u76E1'
   ctx.fillText(modeLabel + '  ' + score, margin + 2, 4)
 
-  // Settings gear — top right
+  // Settings gear — top right, prominent
   if (!showSettings) {
-    drawSvgIcon(W - 18, 18, 22, 'gear', t.textDim)
+    // Gear background circle
+    ctx.beginPath()
+    ctx.arc(W - 18, 18, 16, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill()
+    ctx.strokeStyle = t.textDim; ctx.lineWidth = 1.5; ctx.stroke()
+    drawSvgIcon(W - 18, 18, 20, 'gear', t.header)
   }
 
-  // Current piece (big) + Next piece (small) — top right, current LEFT of next
-  var npSize = 24, npGap = 10
+  // Current piece (big) + Next piece (small) — below gear, right side
+  var npSize = 22, npGap = 8
   var npX = W - margin - npSize       // next piece (rightmost)
-  var cpSize = 34
+  var cpSize = 30
   var cpX = npX - npGap - cpSize       // current piece (left of next)
-  var pieceY = 8
+  var pieceY = 38
 
   // Labels
   ctx.textAlign = 'center'; ctx.fillStyle = t.textDim; ctx.font = '9px Arial'
@@ -192,35 +197,36 @@ function drawGameScreen(t) {
 }
 
 function drawFeverBar(t) {
-  var barW = W - margin * 2, barH = 10
+  var barW = W - margin * 2, barH = 12
   var barX = margin, barY = boardTop - barH - 4
 
   // Background
   ctx.fillStyle = t.btnS || '#333'
-  rr(barX, barY, barW, barH, 5); ctx.fill()
+  rr(barX, barY, barW, barH, 6); ctx.fill()
 
   if (feverActive) {
-    // Fever active — pulsing rainbow bar + countdown
+    // Fever active — muted rainbow bar + countdown
     var pct = Math.max(0, feverTimer / FEVER_DURATION)
     var grad = ctx.createLinearGradient(barX, barY, barX + barW * pct, barY)
-    var hue = (frameCount * 8) % 360
-    grad.addColorStop(0, 'hsl(' + hue + ',100%,60%)')
-    grad.addColorStop(0.5, 'hsl(' + ((hue + 60) % 360) + ',100%,60%)')
-    grad.addColorStop(1, 'hsl(' + ((hue + 120) % 360) + ',100%,60%)')
+    var hue = (frameCount * 4) % 360
+    // Muted/desaturated colors
+    grad.addColorStop(0, 'hsl(' + hue + ',50%,45%)')
+    grad.addColorStop(0.5, 'hsl(' + ((hue + 80) % 360) + ',50%,45%)')
+    grad.addColorStop(1, 'hsl(' + ((hue + 160) % 360) + ',50%,45%)')
     ctx.fillStyle = grad
-    rr(barX, barY, barW * pct, barH, 5); ctx.fill()
+    rr(barX, barY, barW * pct, barH, 6); ctx.fill()
 
-    // Glow effect
+    // Subtle glow
     ctx.save()
-    ctx.shadowColor = 'hsl(' + hue + ',100%,50%)'; ctx.shadowBlur = 8
-    rr(barX, barY, barW * pct, barH, 5); ctx.fill()
+    ctx.shadowColor = 'hsl(' + hue + ',40%,40%)'; ctx.shadowBlur = 4
+    rr(barX, barY, barW * pct, barH, 6); ctx.fill()
     ctx.restore()
 
-    // Label
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.font = 'bold 8px Arial'; ctx.fillStyle = '#fff'
+    // Countdown in center
     var secs = Math.ceil(feverTimer / 1000)
-    ctx.fillText('\uD83D\uDD25 FEVER ' + secs + 's | \u5206\u6578\u00D72 | \u65B9\u584A+1', W / 2, barY + barH / 2)
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = 'bold 9px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    ctx.fillText('\uD83D\uDD25 ' + secs + 's', W / 2, barY + barH / 2)
   } else {
     // Accumulating
     var pct = feverGauge / FEVER_MAX
@@ -228,7 +234,7 @@ function drawFeverBar(t) {
     fillGrad.addColorStop(0, '#FF6B35')
     fillGrad.addColorStop(1, '#FFD700')
     ctx.fillStyle = fillGrad
-    rr(barX, barY, barW * pct, barH, 5); ctx.fill()
+    rr(barX, barY, barW * pct, barH, 6); ctx.fill()
 
     // Label
     if (feverGauge > 0) {
