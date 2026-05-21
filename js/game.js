@@ -21,6 +21,7 @@ function startGame(m) {
   gameStartTime = Date.now()
   autoItemsUsed = { hammer: 0, swap: 0, lightning: 0 }
   showSettings = false; showExitConfirm = false
+  feverGauge = 0; feverActive = false; feverTimer = 0
   recalcLayout()
   state = 'playing'
 }
@@ -44,7 +45,22 @@ function doDrop(col) {
   var newRainbow = countRainbow()
 
   if (result.score > 0) {
-    score += result.score
+    // Fever gauge accumulation
+    var feverGain = result.events.length * 3 + result.chains * 5
+    if (!feverActive) {
+      feverGauge = Math.min(FEVER_MAX, feverGauge + feverGain)
+      if (feverGauge >= FEVER_MAX) {
+        feverActive = true
+        feverTimer = FEVER_DURATION
+        addToast('\uD83D\uDD25 FEVER TIME\uFF01', '\uD83D\uDD25')
+        particles.emitRainbow(W / 2, H / 3)
+      }
+    }
+
+    // Score — 2x during fever
+    var gained = result.score * (feverActive ? 2 : 1)
+    score += gained
+
     if (result.chains > maxCombo) maxCombo = result.chains
     trackSynthesis(result)
     for (var i = 0; i < result.events.length; i++) {
@@ -77,6 +93,8 @@ function doDrop(col) {
 
   currentPiece = nextPiece
   nextPiece = randPiece()
+  // Fever: upgrade next piece by +1 (max 9, not rainbow/white/obsidian)
+  if (feverActive && nextPiece < 9) nextPiece++
 
   if (mode === 'daily') checkDailyComplete()
   if (grid.isGameOver()) endGame()

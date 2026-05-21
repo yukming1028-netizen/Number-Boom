@@ -24,5 +24,10 @@ let showSettings = false  // 設置面板
 let showExitConfirm = false  // 退出確認面板
 let volumeLevel = 0.5  // 音量 0~1
 let soundMuted = false  // 靜音
+let feverGauge = 0  // Fever 累積量 0~100
+let feverActive = false  // Fever 是否激活中
+let feverTimer = 0  // Fever 剩餘時間(ms)
+const FEVER_MAX = 100  // 激活所需量
+const FEVER_DURATION = 10000  // 持續10秒
 // Init from storage
 ;(function(){ try { var v = JSON.parse(localStorage.getItem('nb2_volume')); if(v!=null) volumeLevel=v; var m = JSON.parse(localStorage.getItem('nb2_muted')); if(m) soundMuted=true } catch(e){} })()

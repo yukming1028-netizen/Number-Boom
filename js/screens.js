@@ -157,7 +157,9 @@ function drawGameScreen(t) {
     var hx = boardX + cellGap + hoverCol * (cellW + cellGap)
     var hy = boardTop - cellH * 0.75 - 6
     ctx.globalAlpha = 0.75
-    drawTile(hx + cellW * 0.125, hy, cellW * 0.75, cellH * 0.75, currentPiece, t)
+    // Fever: show upgraded piece preview
+    var previewPiece = feverActive && currentPiece < 9 ? currentPiece + 1 : currentPiece
+    drawTile(hx + cellW * 0.125, hy, cellW * 0.75, cellH * 0.75, previewPiece, t)
     ctx.globalAlpha = 1
     // Arrow indicator
     ctx.fillStyle = t.accent || '#ffd700'
@@ -167,6 +169,9 @@ function drawGameScreen(t) {
     ctx.lineTo(hx + cellW / 2, boardTop + 2)
     ctx.closePath(); ctx.fill()
   }
+
+  // Fever gauge bar — below header, above board
+  drawFeverBar(t)
 
   // Board
   drawBoard(t)
@@ -184,6 +189,54 @@ function drawGameScreen(t) {
 
   // Toasts
   drawToasts(t)
+}
+
+function drawFeverBar(t) {
+  var barW = W - margin * 2, barH = 10
+  var barX = margin, barY = boardTop - barH - 4
+
+  // Background
+  ctx.fillStyle = t.btnS || '#333'
+  rr(barX, barY, barW, barH, 5); ctx.fill()
+
+  if (feverActive) {
+    // Fever active — pulsing rainbow bar + countdown
+    var pct = Math.max(0, feverTimer / FEVER_DURATION)
+    var grad = ctx.createLinearGradient(barX, barY, barX + barW * pct, barY)
+    var hue = (frameCount * 8) % 360
+    grad.addColorStop(0, 'hsl(' + hue + ',100%,60%)')
+    grad.addColorStop(0.5, 'hsl(' + ((hue + 60) % 360) + ',100%,60%)')
+    grad.addColorStop(1, 'hsl(' + ((hue + 120) % 360) + ',100%,60%)')
+    ctx.fillStyle = grad
+    rr(barX, barY, barW * pct, barH, 5); ctx.fill()
+
+    // Glow effect
+    ctx.save()
+    ctx.shadowColor = 'hsl(' + hue + ',100%,50%)'; ctx.shadowBlur = 8
+    rr(barX, barY, barW * pct, barH, 5); ctx.fill()
+    ctx.restore()
+
+    // Label
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = 'bold 8px Arial'; ctx.fillStyle = '#fff'
+    var secs = Math.ceil(feverTimer / 1000)
+    ctx.fillText('\uD83D\uDD25 FEVER ' + secs + 's | \u5206\u6578\u00D72 | \u65B9\u584A+1', W / 2, barY + barH / 2)
+  } else {
+    // Accumulating
+    var pct = feverGauge / FEVER_MAX
+    var fillGrad = ctx.createLinearGradient(barX, barY, barX + barW * pct, barY)
+    fillGrad.addColorStop(0, '#FF6B35')
+    fillGrad.addColorStop(1, '#FFD700')
+    ctx.fillStyle = fillGrad
+    rr(barX, barY, barW * pct, barH, 5); ctx.fill()
+
+    // Label
+    if (feverGauge > 0) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.font = '8px Arial'; ctx.fillStyle = t.textDim
+      ctx.fillText('FEVER ' + Math.floor(pct * 100) + '%', W / 2, barY + barH / 2)
+    }
+  }
 }
 
 function drawBoard(t) {

@@ -13,6 +13,14 @@ function drawAll() {
 
   particles.update()
   particles.draw(ctx)
+  // Fever timer countdown
+  if (feverActive && state === 'playing') {
+    feverTimer -= 16.67  // ~60fps
+    if (feverTimer <= 0) {
+      feverActive = false; feverTimer = 0; feverGauge = 0
+      addToast('\uD83D\uDD25 Fever \u7D50\u675F', '\u274C')
+    }
+  }
   drawSettingsPanel(t)
   drawExitConfirm(t)
   drawToasts(t)
