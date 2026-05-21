@@ -11,6 +11,26 @@ function stopAutoPlay() {
   autoMode = null
 }
 
+// Apply fever score multiplier + gauge accumulation (shared logic)
+function applyFeverScore(result) {
+  if (result.score <= 0) return
+  // Fever gauge accumulation
+  var feverGain = result.events.length * 3 + result.chains * 5
+  if (!feverActive) {
+    feverGauge = Math.min(FEVER_MAX, feverGauge + feverGain)
+    if (feverGauge >= FEVER_MAX) {
+      feverActive = true
+      feverTimer = FEVER_DURATION
+      addToast('\uD83D\uDD25 FEVER TIME\uFF01', '\uD83D\uDD25')
+      particles.emitRainbow(W / 2, H / 3)
+    }
+  }
+  // Score — 2x during fever
+  var gained = result.score * (feverActive ? 2 : 1)
+  score += gained
+  if (result.chains > maxCombo) maxCombo = result.chains
+}
+
 function autoStep() {
   if (!autoPlaying) return
   if (state === 'gameover') {
@@ -31,11 +51,8 @@ function autoStep() {
     grid.hammer(maxR, maxC)
     autoItemsUsed.hammer++
     var result = grid.processMerges()
-    if (result.score > 0) {
-      score += result.score
-      trackSynthesis(result)
-      if (result.chains > maxCombo) maxCombo = result.chains
-    }
+    applyFeverScore(result)
+    trackSynthesis(result)
     if (mode === 'daily') checkDailyComplete()
     if (grid.isGameOver()) endGame()
     return
@@ -62,11 +79,8 @@ function autoStep() {
           grid.lightning(r, c)
           autoItemsUsed.lightning++
           var result = grid.processMerges()
-          if (result.score > 0) {
-            score += result.score
-            trackSynthesis(result)
-            if (result.chains > maxCombo) maxCombo = result.chains
-          }
+          applyFeverScore(result)
+          trackSynthesis(result)
           if (mode === 'daily') checkDailyComplete()
           if (grid.isGameOver()) endGame()
           return
