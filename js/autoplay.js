@@ -1,9 +1,14 @@
-// ===== AUTOPLAY =====
+// ===== AUTOPLAY — Optimized Strategy =====
+// Core principle: DROP is king. Items are emergency tools only.
+// Goal: synthesize the highest value tiles possible.
+
 let autoMode = null
+let autoLastAction = ''  // track to detect loops
 
 function startAutoPlay(m) {
   autoPlaying = true
   autoMode = m || mode
+  autoLastAction = ''
 }
 
 function stopAutoPlay() {
@@ -11,7 +16,7 @@ function stopAutoPlay() {
   autoMode = null
 }
 
-// Apply fever score multiplier + gauge accumulation (shared logic)
+// Fever score + gauge
 function applyFeverScore(result) {
   if (result.score <= 0) return
   var feverGain = (result.events.length * 3 + result.chains * 5) * 0.3
@@ -37,19 +42,56 @@ function boardFullness() {
   return filled / (grid.rows * grid.cols)
 }
 
-// Get all non-empty cells
-function getFilledCells() {
-  var cells = []
-  for (var r = 0; r < grid.rows; r++)
-    for (var c = 0; c < grid.cols; c++)
-      if (grid.cells[r][c] > 0) cells.push({ r: r, c: c, v: grid.cells[r][c] })
-  return cells
+// Evaluate a merge result — higher = better
+// Exponentially reward high-value merges (synthesizing top tiles is the goal)
+function evalResult(result) {
+  if (!result || result.score <= 0) return 0
+  var s = 0
+  for (var i = 0; i < result.events.length; i++) {
+    var nv = result.events[i].newValue
+    // Exponential: value 5→25, 8→64, 10→100, 12→144
+    s += nv * nv * 3
+  }
+  // Chain bonus (cascading merges are extremely valuable)
+  s += result.chains * result.chains * 30
+  s += result.score * 0.1
+  return s
 }
 
-// Find the best swap that creates a merge (highest value possible)
+// Find best column to drop current piece
+function findBestDrop(piece) {
+  var bestCol = -1, bestScore = -1, bestMergeScore = 0
+  for (var c = 0; c < grid.cols; c++) {
+    var tg = grid.clone()
+    var row = tg.drop(c, piece)
+    if (row === -1) continue
+    var result = tg.processMerges()
+    var s = evalResult(result)
+    // Even if no merge, prefer columns that keep board open
+    // (drop to shortest column = more room)
+    if (s === 0) {
+      // Measure how compact this column is (prefer dropping onto same value)
+      var belowV = row + 1 < grid.rows ? grid.cells[row + 1][c] : -1
+      var sideL = c > 0 ? grid.cells[row][c - 1] : -1
+      var sideR = c < grid.cols - 1 ? grid.cells[row][c + 1] : -1
+      if (belowV === piece) s += 5
+      if (sideL === piece || sideR === piece) s += 4
+      // Prefer not filling up the top row
+      if (row > 0) s += 1
+    }
+    if (s > bestScore) {
+      bestScore = s
+      bestCol = c
+      bestMergeScore = result.score
+    }
+  }
+  return { col: bestCol, score: bestScore, mergeScore: bestMergeScore }
+}
+
+// Find best swap (returns null if no beneficial swap found)
 function findBestSwap() {
   var best = null, bestScore = 0
-  var dirs = [[0, 1], [1, 0]] // right, down only (avoid duplicate pairs)
+  var dirs = [[0, 1], [1, 0]]
   for (var r = 0; r < grid.rows; r++) {
     for (var c = 0; c < grid.cols; c++) {
       if (grid.cells[r][c] === 0) continue
@@ -57,23 +99,73 @@ function findBestSwap() {
         var nr = r + dirs[d][0], nc = c + dirs[d][1]
         if (nr >= grid.rows || nc >= grid.cols) continue
         if (grid.cells[nr][nc] === 0) continue
-        // Don't swap same values
         if (grid.cells[r][c] === grid.cells[nr][nc]) continue
-        // Try swap
         var tg = grid.clone()
         tg.swap(r, c, nr, nc)
         var result = tg.processMerges()
-        if (result.score > 0) {
-          // Score: weight by max new value created + chain bonus
-          var maxNew = 0
-          for (var i = 0; i < result.events.length; i++) {
-            if (result.events[i].newValue > maxNew) maxNew = result.events[i].newValue
-          }
-          var s = maxNew * 100 + result.score + result.chains * 50
-          if (s > bestScore) {
-            bestScore = s
-            best = { r1: r, c1: c, r2: nr, c2: nc, maxNew: maxNew }
-          }
+        var s = evalResult(result)
+        if (s > bestScore) {
+          bestScore = s
+          best = { r1: r, c1: c, r2: nr, c2: nc, score: s }
+        }
+      }
+    }
+  }
+  return best
+}
+
+// Find best lightning target (emergency: clear lowest value that has most count)
+function findBestLightning() {
+  var counts = {}, cells = {}
+  for (var r = 0; r < grid.rows; r++) {
+    for (var c = 0; c < grid.cols; c++) {
+      var v = grid.cells[r][c]
+      if (v > 0) {
+        counts[v] = (counts[v] || 0) + 1
+        if (!cells[v]) cells[v] = { r: r, c: c }
+      }
+    }
+  }
+  // Only clear if count >= 4, prefer clearing LOW value tiles (they're worth less)
+  var best = null, bestCount = 0, bestVal = 99
+  for (var v in counts) {
+    var iv = parseInt(v)
+    if (counts[v] >= 4) {
+      // Clear the one with most tiles AND lowest value (preserve high-value tiles)
+      if (counts[v] > bestCount || (counts[v] === bestCount && iv < bestVal)) {
+        bestCount = counts[v]
+        bestVal = iv
+        best = cells[v]
+      }
+    }
+  }
+  return best
+}
+
+// Find hammer target: remove a lone low-value tile that's between two same-value tiles
+function findBestHammer() {
+  var dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+  var best = null, bestVal = 0
+
+  for (var r = 0; r < grid.rows; r++) {
+    for (var c = 0; c < grid.cols; c++) {
+      var v = grid.cells[r][c]
+      if (v <= 0) continue
+
+      // Check if this cell is sandwiched between two same-value neighbors
+      // Horizontal: ? — v — ?
+      if (c > 0 && c < grid.cols - 1) {
+        var lv = grid.cells[r][c - 1], rv = grid.cells[r][c + 1]
+        if (lv === rv && lv > 0 && lv !== v && v < lv) {
+          // Hammering this lets gravity potentially merge the lv pair
+          if (lv > bestVal) { bestVal = lv; best = { r: r, c: c } }
+        }
+      }
+      // Vertical: ? / v / ?
+      if (r > 0 && r < grid.rows - 1) {
+        var tv = grid.cells[r - 1][c], bv = grid.cells[r + 1][c]
+        if (tv === bv && tv > 0 && tv !== v && v < tv) {
+          if (tv > bestVal) { bestVal = tv; best = { r: r, c: c } }
         }
       }
     }
@@ -92,139 +184,82 @@ function autoStep() {
 
   var fullness = boardFullness()
 
-  // === Phase 1: Swap — find a swap that creates a merge (always try first) ===
+  // ========================================================
+  // DECISION TREE: evaluate ALL options, pick the best one
+  // ========================================================
+
+  // 1) Evaluate best drop (always available, primary action)
+  var dropResult = findBestDrop(currentPiece)
+  var dropScore = dropResult.score
+
+  // 2) Evaluate best swap (if it creates a merge)
   var swapMove = findBestSwap()
-  if (swapMove && swapMove.maxNew >= 3) {
+  var swapScore = swapMove ? swapMove.score : 0
+
+  // 3) Items only when board is dangerously full (> 75%)
+  var useLightning = false, useHammer = false
+  if (fullness > 0.75) {
+    useLightning = true
+    if (fullness > 0.85) useHammer = true
+  }
+
+  // === Compare drop vs swap — pick the HIGHEST value action ===
+
+  // Swap beats drop ONLY if it creates significantly higher value
+  // (swap costs an item, drop is free)
+  if (swapMove && swapScore > dropScore * 1.5 && swapScore > 20) {
     grid.swap(swapMove.r1, swapMove.c1, swapMove.r2, swapMove.c2)
     autoItemsUsed.swap++
     var result = grid.processMerges()
     applyFeverScore(result)
     trackSynthesis(result)
-    if (result.chains >= 3) addToast('\u26A1 ' + result.chains + '\u9023\u64CA\uFF01', '\uD83D\uDCA5')
+    autoLastAction = 'swap'
     if (mode === 'daily') checkDailyComplete()
     if (grid.isGameOver()) endGame()
     return
   }
 
-  // === Phase 2: Lightning — clear most abundant LOW-value tiles when board > 60% ===
-  if (fullness > 0.6) {
-    var counts = {}
-    var countCells = {}
-    for (var r = 0; r < grid.rows; r++) {
-      for (var c = 0; c < grid.cols; c++) {
-        var v = grid.cells[r][c]
-        if (v > 0 && v < 6) { // only clear low-value tiles (1-5)
-          counts[v] = (counts[v] || 0) + 1
-          if (!countCells[v]) countCells[v] = { r: r, c: c }
-        }
-      }
-    }
-    var lightningTarget = null, lightningCount = 0
-    for (var v in counts) {
-      if (counts[v] >= 4 && counts[v] > lightningCount) {
-        lightningTarget = parseInt(v)
-        lightningCount = counts[v]
-      }
-    }
-    if (lightningTarget !== null) {
-      var tc = countCells[lightningTarget]
-      grid.lightning(tc.r, tc.c)
+  // Lightning: ONLY if board is very full AND drop doesn't create good merges
+  if (useLightning && dropScore < 15) {
+    var lt = findBestLightning()
+    if (lt) {
+      grid.lightning(lt.r, lt.c)
       autoItemsUsed.lightning++
       var result = grid.processMerges()
       applyFeverScore(result)
       trackSynthesis(result)
+      autoLastAction = 'lightning'
       if (mode === 'daily') checkDailyComplete()
       if (grid.isGameOver()) endGame()
       return
     }
   }
 
-  // === Phase 3: Hammer — remove a tile blocking a potential high-value merge ===
-  // Find groups of size 2 (one short of merge), hammer the neighbor that blocks them
-  if (fullness > 0.5) {
-    var bestHammer = findHammerTarget()
-    if (bestHammer) {
-      grid.hammer(bestHammer.r, bestHammer.c)
+  // Hammer: ONLY if board nearly full AND no good drop/swap
+  if (useHammer && dropScore < 10 && swapScore < 10) {
+    var ht = findBestHammer()
+    if (ht) {
+      grid.hammer(ht.r, ht.c)
       autoItemsUsed.hammer++
       var result = grid.processMerges()
       applyFeverScore(result)
       trackSynthesis(result)
+      autoLastAction = 'hammer'
       if (mode === 'daily') checkDailyComplete()
       if (grid.isGameOver()) endGame()
       return
     }
   }
 
-  // === Phase 4: Drop — find best column ===
-  var bestCol = -1, bestScore = -1
-  for (var c = 0; c < grid.cols; c++) {
-    var testGrid = grid.clone()
-    var row = testGrid.drop(c, currentPiece)
-    if (row === -1) continue
-    var result = testGrid.processMerges()
-    var s = 0
-    // Heavily weight higher value merges
-    for (var i = 0; i < result.events.length; i++) {
-      s += result.events[i].newValue * result.events[i].newValue * 5
-    }
-    s += result.score
-    if (result.chains > 1) s += result.chains * 80
-    if (s > bestScore) { bestScore = s; bestCol = c }
-  }
-  if (bestCol === -1) bestCol = Math.floor(Math.random() * grid.cols)
-  doDrop(bestCol)
-}
-
-// Find hammer target: look for groups of 2 same-value tiles that are adjacent,
-// find a different-value neighbor that we can hammer to make space for a 3rd
-function findHammerTarget() {
-  var visited = {}
-  var best = null, bestVal = 0
-
-  for (var r = 0; r < grid.rows; r++) {
+  // === DEFAULT: Drop (the primary action 90%+ of the time) ===
+  var col = dropResult.col
+  if (col === -1) {
+    // All columns full — fallback: find any non-full column
     for (var c = 0; c < grid.cols; c++) {
-      var v = grid.cells[r][c]
-      if (v === 0 || v >= 11) continue // don't waste hammer on low priority
-      var key = r + ',' + c
-      if (visited[key]) continue
-
-      // Find all same-value neighbors (BFS limited to size 2)
-      var pair = [{ r: r, c: c }]
-      visited[key] = true
-      var dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]]
-      for (var d = 0; d < dirs.length; d++) {
-        var nr = r + dirs[d][0], nc = c + dirs[d][1]
-        if (nr >= 0 && nr < grid.rows && nc >= 0 && nc < grid.cols
-          && grid.cells[nr][nc] === v && !visited[nr + ',' + nc]) {
-          pair.push({ r: nr, c: nc })
-          visited[nr + ',' + nc] = true
-          break // only need pair of 2
-        }
-      }
-
-      if (pair.length === 2) {
-        // For each cell in the pair, check if there's an empty neighbor
-        // or a different-value neighbor we could hammer to extend group
-        for (var p = 0; p < pair.length; p++) {
-          for (var d = 0; d < dirs.length; d++) {
-            var nr = pair[p].r + dirs[d][0], nc = pair[p].c + dirs[d][1]
-            if (nr >= 0 && nr < grid.rows && nc >= 0 && nc < grid.cols) {
-              var nv = grid.cells[nr][nc]
-              // Empty cell: dropping same value here would create group of 3
-              // But we can't hammer empty. Look for a different low-value blocker
-              if (nv > 0 && nv !== v && nv < v) {
-                // Hammering this would let gravity possibly align things
-                // Only worth it for higher value groups
-                if (v > bestVal) {
-                  bestVal = v
-                  best = { r: nr, c: nc }
-                }
-              }
-            }
-          }
-        }
-      }
+      if (grid.cells[0][c] === 0) { col = c; break }
     }
   }
-  return best
+  if (col === -1) col = 0  // truly stuck
+  doDrop(col)
+  autoLastAction = 'drop'
 }
