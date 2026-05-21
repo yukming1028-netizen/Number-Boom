@@ -31,6 +31,15 @@ function applyFeverScore(result) {
   if (result.chains > maxCombo) maxCombo = result.chains
 }
 
+function boardFullness() {
+  var total = grid.rows * grid.cols
+  var filled = 0
+  for (var r = 0; r < grid.rows; r++)
+    for (var c = 0; c < grid.cols; c++)
+      if (grid.cells[r][c] > 0) filled++
+  return filled / total
+}
+
 function autoStep() {
   if (!autoPlaying) return
   if (state === 'gameover') {
@@ -40,63 +49,75 @@ function autoStep() {
   }
   if (state !== 'playing') { stopAutoPlay(); return }
 
-  // Try hammer on highest tile (value >= 7)
-  var maxR = -1, maxC = -1, maxV = 0
-  for (var r = 0; r < grid.rows; r++) {
-    for (var c = 0; c < grid.cols; c++) {
-      if (grid.cells[r][c] > maxV) { maxV = grid.cells[r][c]; maxR = r; maxC = c }
-    }
-  }
-  if (maxV >= 7 && maxR >= 0) {
-    grid.hammer(maxR, maxC)
-    autoItemsUsed.hammer++
-    var result = grid.processMerges()
-    applyFeverScore(result)
-    trackSynthesis(result)
-    if (mode === 'daily') checkDailyComplete()
-    if (grid.isGameOver()) endGame()
-    return
-  }
+  var fullness = boardFullness()
 
-  // Try lightning on tiles with count >= 3
-  var counts = {}
-  for (var r = 0; r < grid.rows; r++) {
-    for (var c = 0; c < grid.cols; c++) {
-      var v = grid.cells[r][c]
-      if (v > 0) counts[v] = (counts[v] || 0) + 1
-    }
-  }
-  var lightningTarget = null
-  for (var v in counts) {
-    if (counts[v] >= 4 && (!lightningTarget || counts[v] > counts[lightningTarget])) {
-      lightningTarget = parseInt(v)
-    }
-  }
-  if (lightningTarget !== null) {
+  // Only use items when board is getting full (> 75%)
+  if (fullness > 0.75) {
+    // Lightning: clear the most abundant tile type (count >= 4)
+    var counts = {}
     for (var r = 0; r < grid.rows; r++) {
       for (var c = 0; c < grid.cols; c++) {
-        if (grid.cells[r][c] === lightningTarget) {
-          grid.lightning(r, c)
-          autoItemsUsed.lightning++
-          var result = grid.processMerges()
-          applyFeverScore(result)
-          trackSynthesis(result)
-          if (mode === 'daily') checkDailyComplete()
-          if (grid.isGameOver()) endGame()
-          return
+        var v = grid.cells[r][c]
+        if (v > 0) counts[v] = (counts[v] || 0) + 1
+      }
+    }
+    var lightningTarget = null
+    for (var v in counts) {
+      if (counts[v] >= 4 && (!lightningTarget || counts[v] > counts[lightningTarget])) {
+        lightningTarget = parseInt(v)
+      }
+    }
+    if (lightningTarget !== null) {
+      for (var r = 0; r < grid.rows; r++) {
+        for (var c = 0; c < grid.cols; c++) {
+          if (grid.cells[r][c] === lightningTarget) {
+            grid.lightning(r, c)
+            autoItemsUsed.lightning++
+            var result = grid.processMerges()
+            applyFeverScore(result)
+            trackSynthesis(result)
+            if (mode === 'daily') checkDailyComplete()
+            if (grid.isGameOver()) endGame()
+            return
+          }
         }
+      }
+    }
+
+    // Hammer: only on very high tiles (>= 10 rainbow) when board is very full
+    if (fullness > 0.85) {
+      var maxR = -1, maxC = -1, maxV = 0
+      for (var r = 0; r < grid.rows; r++) {
+        for (var c = 0; c < grid.cols; c++) {
+          if (grid.cells[r][c] > maxV) { maxV = grid.cells[r][c]; maxR = r; maxC = c }
+        }
+      }
+      if (maxV >= 10 && maxR >= 0) {
+        grid.hammer(maxR, maxC)
+        autoItemsUsed.hammer++
+        var result = grid.processMerges()
+        applyFeverScore(result)
+        trackSynthesis(result)
+        if (mode === 'daily') checkDailyComplete()
+        if (grid.isGameOver()) endGame()
+        return
       }
     }
   }
 
-  // Find best column to drop
+  // Find best column to drop — prioritize merges and chain reactions
   var bestCol = -1, bestScore = -1
   for (var c = 0; c < grid.cols; c++) {
     var testGrid = grid.clone()
     var row = testGrid.drop(c, currentPiece)
     if (row === -1) continue
     var result = testGrid.processMerges()
-    var s = result.score + (result.chains > 1 ? result.chains * 50 : 0)
+    // Heavily weight chains to encourage chain reactions
+    var s = result.score + (result.chains > 1 ? result.chains * 100 : 0)
+    // Bonus for creating higher value tiles
+    for (var i = 0; i < result.events.length; i++) {
+      s += result.events[i].newValue * 10
+    }
     if (s > bestScore) { bestScore = s; bestCol = c }
   }
   if (bestCol === -1) bestCol = Math.floor(Math.random() * grid.cols)
