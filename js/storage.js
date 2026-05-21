@@ -88,8 +88,10 @@ const S={
     return count
   },
   // Volume & mute
-  getVolume(){return this._g('volume')!=null?this._g('volume'):0.5},
-  setVolume(v){this._s('volume',v)},
+  getBgmVolume(){return this._g('bgm')!=null?this._g('bgm'):0.5},
+  setBgmVolume(v){this._s('bgm',v)},
+  getSfxVolume(){return this._g('sfx')!=null?this._g('sfx'):0.7},
+  setSfxVolume(v){this._s('sfx',v)},
   getMuted(){return this._g('muted')||false},
   setMuted(m){this._s('muted',m)},
   // Achievements

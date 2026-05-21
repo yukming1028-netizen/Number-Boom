@@ -791,16 +791,18 @@ function drawLeaderboard(t) {
 // ===== SETTINGS PANEL =====
 function drawSettingsPanel(t) {
   if (!showSettings) return
-  // Overlay
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H)
+  var inGame = (state === 'playing' || state === 'item_select')
 
-  var pw = Math.min(280, W - 40), ph = 300
+  // Overlay — lower opacity
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H)
+
+  var pw = Math.min(280, W - 40), ph = inGame ? 420 : 290
   var px = W / 2 - pw / 2, py = H / 2 - ph / 2
 
-  // Card
+  // Card — more transparent
   ctx.save()
-  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 20
-  ctx.fillStyle = t.board || '#1a1a2e'
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 20
+  ctx.fillStyle = t.board ? hexToRgba(t.board, 0.88) : 'rgba(26,26,46,0.88)'
   rr(px, py, pw, ph, 16); ctx.fill()
   ctx.shadowBlur = 0
   // Border
@@ -808,64 +810,97 @@ function drawSettingsPanel(t) {
   rr(px, py, pw, ph, 16); ctx.stroke()
   ctx.restore()
 
-  // Title
-  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 18px Arial'
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-  ctx.fillText('\u2699\uFE0F \u8A2D\u5B9A', W / 2, py + 16)
-
-  // Volume slider
-  ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'
-  ctx.textAlign = 'left'
-  ctx.fillText('\uD83D\uDD0A \u97F3\u91CF', px + 20, py + 55)
-  // Slider track
-  var slX = px + 20, slY = py + 78, slW = pw - 40, slH = 8
-  ctx.fillStyle = t.btnS || '#333'
-  rr(slX, slY, slW, slH, 4); ctx.fill()
-  // Slider fill
-  var fillW = slW * volumeLevel
-  ctx.fillStyle = t.accent || '#ffd700'
-  rr(slX, slY, fillW, slH, 4); ctx.fill()
-  // Slider knob
-  var knobX = slX + fillW
-  ctx.beginPath(); ctx.arc(knobX, slY + slH / 2, 10, 0, Math.PI * 2)
-  ctx.fillStyle = '#fff'; ctx.fill()
-  ctx.strokeStyle = t.accent || '#ffd700'; ctx.lineWidth = 2; ctx.stroke()
-  // Percentage
-  ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'right'
-  ctx.fillText(Math.round(volumeLevel * 100) + '%', px + pw - 20, py + 55)
-
-  // Mute checkbox
-  var cbX = px + 20, cbY = py + 100, cbS = 20
-  ctx.fillStyle = t.btnS || '#333'
-  rr(cbX, cbY, cbS, cbS, 4); ctx.fill()
-  if (soundMuted) {
-    ctx.fillStyle = t.accent || '#ffd700'
-    rr(cbX + 2, cbY + 2, cbS - 4, cbS - 4, 3); ctx.fill()
-    // Checkmark
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5
-    ctx.beginPath()
-    ctx.moveTo(cbX + 5, cbY + 10); ctx.lineTo(cbX + 9, cbY + 15); ctx.lineTo(cbX + 16, cbY + 5)
-    ctx.stroke()
-  }
-  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'left'
-  ctx.fillText('\uD83D\uDD07 \u975C\u97F3', cbX + cbS + 10, cbY + 4)
-
-  // Continue button
-  var btnW = pw - 40, btnH = 44
-  var btn1Y = py + 140
-  drawBtn(px + 20, btn1Y, btnW, btnH, t.accent || '#ffd700', 10)
-  ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\u25B6 \u7E7C\u7E8C\u904A\u6232', W / 2, btn1Y + btnH / 2)
-
-  // Exit button
-  var btn2Y = py + 196
-  drawBtn(px + 20, btn2Y, btnW, btnH, '#e74c3c', 10)
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\uD83D\uDEAA \u9000\u51FA\u904A\u6232', W / 2, btn2Y + btnH / 2)
-
   // Close X — top right
   ctx.fillStyle = t.textDim; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\u2715', px + pw - 20, py + 14)
+  ctx.fillText('\u2715', px + pw - 20, py + 16)
+
+  // Title with gear icon
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 18px Arial'
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+  drawSettingsGear(W / 2 - 40, py + 12, 14, t.accent || '#ffd700')
+  ctx.fillText('\u8A2D\u5B9A', W / 2 + 2, py + 16)
+
+  // Helper: draw beautiful slider with icon
+  function drawSliderRow(icon, label, value, y, color) {
+    // Icon
+    if (icon === 'bgm') drawBgmIcon(px + 18, y - 2, 16, t.text || '#fff')
+    else if (icon === 'sfx') drawSfxIcon(px + 18, y - 2, 16, t.text || '#fff')
+
+    // Label
+    ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'left'
+    ctx.fillText(label, px + 44, y)
+
+    // Percentage
+    ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'right'
+    ctx.fillText(Math.round(value * 100) + '%', px + pw - 20, y)
+
+    // Slider track — rounded gradient
+    var slX = px + 44, slY = y + 20, slW = pw - 70, slH = 8
+    // Track bg
+    ctx.fillStyle = t.btnS || '#333'
+    rr(slX, slY, slW, slH, 4); ctx.fill()
+    // Fill gradient
+    var fillW = slW * value
+    if (fillW > 0) {
+      var grad = ctx.createLinearGradient(slX, slY, slX + fillW, slY)
+      grad.addColorStop(0, color)
+      grad.addColorStop(1, lightenColor(color, 30))
+      ctx.fillStyle = grad
+      rr(slX, slY, Math.max(8, fillW), slH, 4); ctx.fill()
+    }
+    // Knob — circle with glow
+    var knobX = slX + fillW
+    ctx.beginPath(); ctx.arc(knobX, slY + slH / 2, 10, 0, Math.PI * 2)
+    ctx.fillStyle = '#fff'; ctx.fill()
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.stroke()
+    // Inner dot
+    ctx.beginPath(); ctx.arc(knobX, slY + slH / 2, 4, 0, Math.PI * 2)
+    ctx.fillStyle = color; ctx.fill()
+  }
+
+  // BGM slider
+  drawSliderRow('bgm', '\u80CC\u666F\u97F3\u6A02', bgmVolume, py + 52, '#4A90D9')
+
+  // SFX slider
+  drawSliderRow('sfx', '\u97F3\u6548', sfxVolume, py + 100, '#2ED573')
+
+  // Mute toggle — pill switch
+  var mtX = px + pw / 2, mtY = py + 160
+  var swW = 50, swH = 26, swR = 13
+  // Track
+  ctx.fillStyle = soundMuted ? '#e74c3c' : '#2ED573'
+  rr(mtX - swW / 2, mtY - swH / 2, swW, swH, swR); ctx.fill()
+  // Knob circle
+  var knobOff = soundMuted ? swW / 2 - swR : -(swW / 2 - swR)
+  ctx.beginPath(); ctx.arc(mtX + knobOff, mtY, swR - 3, 0, Math.PI * 2)
+  ctx.fillStyle = '#fff'; ctx.fill()
+  // Label
+  ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'center'
+  ctx.fillText(soundMuted ? '\uD83D\uDD07 \u5DF2\u975C\u97F3' : '\uD83D\uDD0A \u97F3\u91CF\u958B', mtX, mtY - 20)
+
+  if (inGame) {
+    // Continue button
+    var btnW = pw - 40, btnH = 44
+    var btn1Y = py + 200
+    drawBtn(px + 20, btn1Y, btnW, btnH, t.accent || '#ffd700', 10)
+    ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+    drawPlayIcon(W / 2 - 44, btn1Y + btnH / 2 - 7, 12, '#000')
+    ctx.fillText('\u7E7C\u7E8C\u904A\u6232', W / 2 + 2, btn1Y + btnH / 2)
+
+    // Exit button
+    var btn2Y = py + 256
+    drawBtn(px + 20, btn2Y, btnW, btnH, '#e74c3c', 10)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+    drawExitIcon(W / 2 - 44, btn2Y + btnH / 2 - 7, 12, '#fff')
+    ctx.fillText('\u9000\u51FA\u904A\u6232', W / 2 + 2, btn2Y + btnH / 2)
+  } else {
+    // Menu: just a close button
+    var btnW = pw - 40, btnH = 44
+    var closeBtnY = py + ph - 60
+    drawBtn(px + 20, closeBtnY, btnW, btnH, t.accent || '#ffd700', 10)
+    ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
+    ctx.fillText('\u2715 \u95DC\u9589', W / 2, closeBtnY + btnH / 2)
+  }
 }
 
 // ===== EXIT CONFIRM PANEL =====
@@ -904,6 +939,132 @@ function drawExitConfirm(t) {
 }
 
 // ===== TOASTS =====
+
+// ===== ICON DRAWING HELPERS =====
+// Hex color to rgba string
+function hexToRgba(hex, alpha) {
+  hex = hex.replace('#', '')
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]
+  var r = parseInt(hex.substring(0,2),16)
+  var g = parseInt(hex.substring(2,4),16)
+  var b = parseInt(hex.substring(4,6),16)
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')'
+}
+
+// Lighten a hex color by amount
+function lightenColor(hex, amt) {
+  hex = hex.replace('#', '')
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]
+  var r = Math.min(255, parseInt(hex.substring(0,2),16) + amt)
+  var g = Math.min(255, parseInt(hex.substring(2,4),16) + amt)
+  var b = Math.min(255, parseInt(hex.substring(4,6),16) + amt)
+  return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1)
+}
+
+// Gear icon for settings
+function drawSettingsGear(cx, cy, size, color) {
+  ctx.save()
+  ctx.strokeStyle = color; ctx.fillStyle = color
+  ctx.lineWidth = Math.max(1.5, size / 8)
+  // Outer ring with teeth
+  var r = size / 2
+  ctx.beginPath()
+  for (var i = 0; i < 8; i++) {
+    var a = (i / 8) * Math.PI * 2 - Math.PI / 2
+    var a2 = ((i + 0.35) / 8) * Math.PI * 2 - Math.PI / 2
+    var a3 = ((i + 0.65) / 8) * Math.PI * 2 - Math.PI / 2
+    var ri = r * 0.7, ro = r
+    if (i === 0) ctx.moveTo(cx + Math.cos(a) * ro, cy + Math.sin(a) * ro)
+    ctx.lineTo(cx + Math.cos(a2) * ro, cy + Math.sin(a2) * ro)
+    ctx.lineTo(cx + Math.cos(a2) * ri, cy + Math.sin(a2) * ri)
+    ctx.lineTo(cx + Math.cos(a3) * ri, cy + Math.sin(a3) * ri)
+    var an = ((i + 1) / 8) * Math.PI * 2 - Math.PI / 2
+    ctx.lineTo(cx + Math.cos(an) * ro, cy + Math.sin(an) * ro)
+  }
+  ctx.closePath(); ctx.fill()
+  // Center hole
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(26,26,46,0.88)'; ctx.fill()
+  ctx.restore()
+}
+
+// BGM icon — musical note ♪
+function drawBgmIcon(cx, cy, size, color) {
+  ctx.save()
+  ctx.fillStyle = color; ctx.strokeStyle = color
+  ctx.lineWidth = size / 8
+  // Note head (oval)
+  var hs = size * 0.3
+  ctx.beginPath()
+  ctx.ellipse(cx - hs * 0.6, cy + hs * 1.5, hs * 0.9, hs * 0.65, -0.3, 0, Math.PI * 2)
+  ctx.fill()
+  // Stem
+  ctx.beginPath()
+  ctx.moveTo(cx + hs * 0.15, cy + hs * 1.2)
+  ctx.lineTo(cx + hs * 0.15, cy - hs * 1.2)
+  ctx.stroke()
+  // Flag
+  ctx.beginPath()
+  ctx.moveTo(cx + hs * 0.15, cy - hs * 1.2)
+  ctx.quadraticCurveTo(cx + hs * 1.8, cy - hs * 0.3, cx + hs * 0.3, cy + hs * 0.2)
+  ctx.stroke()
+  ctx.restore()
+}
+
+// SFX icon — speaker with waves
+function drawSfxIcon(cx, cy, size, color) {
+  ctx.save()
+  ctx.fillStyle = color; ctx.strokeStyle = color
+  ctx.lineWidth = size / 8
+  var s = size * 0.5
+  // Speaker body (trapezoid)
+  ctx.beginPath()
+  ctx.moveTo(cx - s * 0.5, cy - s * 0.2)
+  ctx.lineTo(cx - s * 0.5, cy + s * 0.2)
+  ctx.lineTo(cx - s * 0.1, cy + s * 0.2)
+  ctx.lineTo(cx + s * 0.4, cy + s * 0.65)
+  ctx.lineTo(cx + s * 0.4, cy - s * 0.65)
+  ctx.lineTo(cx - s * 0.1, cy - s * 0.2)
+  ctx.closePath(); ctx.fill()
+  // Sound waves
+  ctx.lineWidth = Math.max(1.5, size / 10)
+  for (var i = 1; i <= 2; i++) {
+    ctx.beginPath()
+    ctx.arc(cx + s * 0.4, cy, s * 0.3 * i, -0.5, 0.5)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+// Play icon ▶
+function drawPlayIcon(cx, cy, size, color) {
+  ctx.save()
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.moveTo(cx - size * 0.3, cy - size * 0.5)
+  ctx.lineTo(cx + size * 0.5, cy)
+  ctx.lineTo(cx - size * 0.3, cy + size * 0.5)
+  ctx.closePath(); ctx.fill()
+  ctx.restore()
+}
+
+// Exit icon — door with arrow
+function drawExitIcon(cx, cy, size, color) {
+  ctx.save()
+  ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, size / 6)
+  var s = size * 0.5
+  // Door frame
+  ctx.strokeRect(cx - s * 0.6, cy - s * 0.7, s * 0.9, s * 1.4)
+  // Arrow pointing right out
+  ctx.beginPath()
+  ctx.moveTo(cx - s * 0.1, cy)
+  ctx.lineTo(cx + s * 0.6, cy)
+  ctx.moveTo(cx + s * 0.25, cy - s * 0.35)
+  ctx.lineTo(cx + s * 0.6, cy)
+  ctx.lineTo(cx + s * 0.25, cy + s * 0.35)
+  ctx.stroke()
+  ctx.restore()
+}
 function drawToasts(t) {
   var now = Date.now()
   toasts = toasts.filter(function(to) { return now - to.time < 2500 })

@@ -15,13 +15,20 @@ canvas.addEventListener('touchmove', function(e) {
   var py = touch.clientY - rect.top
   // Settings slider drag
   if (showSettings) {
-    var pw = Math.min(280, W - 40)
-    var panX = W / 2 - pw / 2, panY = H / 2 - 300 / 2
-    var slX = panX + 20, slY = panY + 78, slW = pw - 40
-    if (py >= slY - 15 && py <= slY + 25 && px >= slX && px <= slX + slW) {
-      volumeLevel = Math.max(0, Math.min(1, (px - slX) / slW))
-      S.setVolume(volumeLevel)
-      return
+    var inGame = (state === 'playing' || state === 'item_select')
+    var pw = Math.min(280, W - 40), ph = inGame ? 420 : 290
+    var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
+    // BGM slider
+    var bgmSlX = panX + 44, bgmSlY = panY + 78, bgmSlW = pw - 70
+    if (py >= bgmSlY - 12 && py <= bgmSlY + 20 && px >= bgmSlX && px <= bgmSlX + bgmSlW) {
+      bgmVolume = Math.max(0, Math.min(1, (px - bgmSlX) / bgmSlW))
+      S.setBgmVolume(bgmVolume); return
+    }
+    // SFX slider
+    var sfxSlX = panX + 44, sfxSlY = panY + 128, sfxSlW = pw - 70
+    if (py >= sfxSlY - 12 && py <= sfxSlY + 20 && px >= sfxSlX && px <= sfxSlX + sfxSlW) {
+      sfxVolume = Math.max(0, Math.min(1, (px - sfxSlX) / sfxSlW))
+      S.setSfxVolume(sfxVolume); return
     }
   }
   // Only track hover within board area
@@ -79,7 +86,7 @@ function handleMenuClick(px, py) {
   if (px >= iconX && px <= iconX + MI_W) {
     var iconSpan = 3 * MI_GAP + MI_H
     var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 - 25 : 65
-    if (py >= iconY0 && py < iconY0 + MI_H) { addToast('\u2699\uFE0F \u8A2D\u5B9A\u5373\u5C07\u63A8\u51FA', '\uD83D\uDEE0\uFE0F'); return }
+    if (py >= iconY0 && py < iconY0 + MI_H) { showSettings = true; return }
     if (py >= iconY0 + MI_GAP && py < iconY0 + MI_GAP + MI_H) { state = 'themes'; return }
     if (py >= iconY0 + MI_GAP * 2 && py < iconY0 + MI_GAP * 2 + MI_H) { state = 'achievements'; return }
     if (py >= iconY0 + MI_GAP * 3 && py < iconY0 + MI_GAP * 3 + MI_H) { state = 'leaderboard'; return }
@@ -268,8 +275,8 @@ function handleLeaderboardClick(px, py) {
 }
 
 function handleSettingsClick(px, py) {
-  var t = getTheme()
-  var pw = Math.min(280, W - 40), ph = 300
+  var inGame = (state === 'playing' || state === 'item_select')
+  var pw = Math.min(280, W - 40), ph = inGame ? 420 : 290
   var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
 
   // Close X — top right
@@ -277,31 +284,45 @@ function handleSettingsClick(px, py) {
     showSettings = false; return
   }
 
-  // Volume slider
-  var slX = panX + 20, slY = panY + 78, slW = pw - 40, slH = 8
-  if (py >= slY - 10 && py <= slY + slH + 10 && px >= slX && px <= slX + slW) {
-    volumeLevel = Math.max(0, Math.min(1, (px - slX) / slW))
-    S.setVolume(volumeLevel)
-    return
+  // BGM slider
+  var bgmSlX = panX + 44, bgmSlY = panY + 78, bgmSlW = pw - 70
+  if (py >= bgmSlY - 12 && py <= bgmSlY + 20 && px >= bgmSlX && px <= bgmSlX + bgmSlW) {
+    bgmVolume = Math.max(0, Math.min(1, (px - bgmSlX) / bgmSlW))
+    S.setBgmVolume(bgmVolume); return
   }
 
-  // Mute checkbox
-  var cbX = panX + 20, cbY = panY + 100, cbS = 20
-  if (px >= cbX && px <= cbX + cbS && py >= cbY && py <= cbY + cbS) {
+  // SFX slider
+  var sfxSlX = panX + 44, sfxSlY = panY + 128, sfxSlW = pw - 70
+  if (py >= sfxSlY - 12 && py <= sfxSlY + 20 && px >= sfxSlX && px <= sfxSlX + sfxSlW) {
+    sfxVolume = Math.max(0, Math.min(1, (px - sfxSlX) / sfxSlW))
+    S.setSfxVolume(sfxVolume); return
+  }
+
+  // Mute toggle
+  var mtX = panX + pw / 2, mtY = panY + 166
+  if (px >= mtX - 50 && px <= mtX + 50 && py >= mtY - 14 && py <= mtY + 14) {
     soundMuted = !soundMuted; S.setMuted(soundMuted); return
   }
 
-  // Continue button
-  var btnW = pw - 40, btnH = 44
-  var btn1Y = panY + 140
-  if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn1Y && py <= btn1Y + btnH) {
-    showSettings = false; return
-  }
-
-  // Exit button
-  var btn2Y = panY + 196
-  if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn2Y && py <= btn2Y + btnH) {
-    showSettings = false; showExitConfirm = true; return
+  if (inGame) {
+    // Continue button
+    var btnW = pw - 40, btnH = 44
+    var btn1Y = panY + 200
+    if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn1Y && py <= btn1Y + btnH) {
+      showSettings = false; return
+    }
+    // Exit button
+    var btn2Y = panY + 256
+    if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn2Y && py <= btn2Y + btnH) {
+      showSettings = false; showExitConfirm = true; return
+    }
+  } else {
+    // Menu: close button
+    var closeY = panY + ph - 60
+    var btnW = pw - 40, btnH = 44
+    if (px >= panX + 20 && px <= panX + 20 + btnW && py >= closeY && py <= closeY + btnH) {
+      showSettings = false; return
+    }
   }
 }
 
