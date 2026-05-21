@@ -4,7 +4,7 @@ var _dragSlider = null  // 'bgm' | 'sfx' | null — which slider is being dragge
 
 function _getSliderLayout() {
   var inGame = (state === 'playing' || state === 'item_select')
-  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 200
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 240
   var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
   // Slider track positions (must match drawSettingsPanel)
   var bgmY = panY + 55
@@ -296,7 +296,7 @@ function handleLeaderboardClick(px, py) {
 
 function handleSettingsClick(px, py) {
   var inGame = (state === 'playing' || state === 'item_select')
-  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 200
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 240
   var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
 
   // Close X — top right

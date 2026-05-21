@@ -804,7 +804,7 @@ function drawSettingsPanel(t) {
   // Overlay
   ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H)
 
-  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 200
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 240
   var px = W / 2 - pw / 2, py = H / 2 - ph / 2
 
   // Card
