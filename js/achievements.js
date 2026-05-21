@@ -7,9 +7,9 @@ const ACHIEVEMENTS = [
   { id: 'million', name: '???', desc: '???', icon: 'question', hidden: true, reward: { type: 'theme', id: 'infinity' }, revealName: '\u4E0D\u53EF\u80FD\u7684\u4E8B', revealDesc: '\u7121\u76E1\u6A21\u5F0F\u9054\u5230100\u842C\u5206' },
 
   // === 累積成就（無上限，每達成一個階梯就獎勵）===
-  { id: 'cum_score', name: '\u5206\u6578\u5927\u5E2B', desc: '\u6BCF\u7D2F\u7A4D10\u842C\u5206', icon: 'medal', repeatable: true, step: 100000, reward: { hammer: 1, swap: 1, lightning: 1 } },
-  { id: 'cum_merge', name: '\u5408\u6210\u9054\u4EBA', desc: '\u6BCF\u7D2F\u7A4D1000\u6B21\u5408\u6210', icon: 'merge', repeatable: true, step: 1000, reward: { hammer: 2, swap: 1, lightning: 1 } },
-  { id: 'cum_combo', name: '\u9023\u64CA\u4E4B\u795E', desc: '\u6BCF\u7D2F\u7A4D100\u6B21\u9023\u64CA', icon: 'combo', repeatable: true, step: 100, reward: { hammer: 1, swap: 2, lightning: 2 } },
+  { id: 'cum_score', name: '\u5206\u6578\u5927\u5E2B', desc: '\u6BCF\u7D2F\u7A4D10\u842C\u5206', icon: 'medal', repeatable: true, step: 100000, reward: { hammer: 1 } },
+  { id: 'cum_merge', name: '\u5408\u6210\u9054\u4EBA', desc: '\u6BCF\u7D2F\u7A4D1000\u6B21\u5408\u6210', icon: 'merge', repeatable: true, step: 1000, reward: { swap: 1 } },
+  { id: 'cum_combo', name: '\u9023\u64CA\u4E4B\u795E', desc: '\u6BCF\u7D2F\u7A4D100\u6B21\u9023\u64CA', icon: 'combo', repeatable: true, step: 100, reward: { lightning: 1 } },
 ]
 
 // Get achievement icon SVG paths
