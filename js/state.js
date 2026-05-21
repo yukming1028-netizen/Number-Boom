@@ -24,11 +24,12 @@ let showSettings = false  // 設置面板
 let showExitConfirm = false  // 退出確認面板
 let bgmVolume = 0.5  // 背景音音量 0~1
 let sfxVolume = 0.7  // 音效音量 0~1
-let soundMuted = false  // 靜音
+let bgmMuted = false  // 背景音靜音
+let sfxMuted = false  // 音效靜音
 let feverGauge = 0  // Fever 累積量 0~100
 let feverActive = false  // Fever 是否激活中
 let feverTimer = 0  // Fever 剩餘時間(ms)
 const FEVER_MAX = 100  // 激活所需量
 const FEVER_DURATION = 15000  // 持續15秒
 // Init from storage
-;(function(){ try { var v = JSON.parse(localStorage.getItem('nb2_bgm')); if(v!=null) bgmVolume=v; var s = JSON.parse(localStorage.getItem('nb2_sfx')); if(s!=null) sfxVolume=s; var m = JSON.parse(localStorage.getItem('nb2_muted')); if(m) soundMuted=true } catch(e){} })()
+;(function(){ try { var v = JSON.parse(localStorage.getItem('nb2_bgm')); if(v!=null) bgmVolume=v; var s = JSON.parse(localStorage.getItem('nb2_sfx')); if(s!=null) sfxVolume=s; var bm = JSON.parse(localStorage.getItem('nb2_bgm_muted')); if(bm) bgmMuted=true; var sm = JSON.parse(localStorage.getItem('nb2_sfx_muted')); if(sm) sfxMuted=true } catch(e){} })()

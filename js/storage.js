@@ -94,6 +94,10 @@ const S={
   setSfxVolume(v){this._s('sfx',v)},
   getMuted(){return this._g('muted')||false},
   setMuted(m){this._s('muted',m)},
+  getBgmMuted(){return this._g('bgm_muted')||false},
+  setBgmMuted(m){this._s('bgm_muted',m)},
+  getSfxMuted(){return this._g('sfx_muted')||false},
+  setSfxMuted(m){this._s('sfx_muted',m)},
   // Achievements
   getAchievements(){return this._g('ach')||{}},
   saveAchievements(a){this._s('ach',a)},

@@ -827,11 +827,11 @@ function drawSettingsPanel(t) {
   ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillText('\u8A2D\u5B9A', W / 2 + 2, titleY)
 
-  // Helper: draw slider row with icon + label + mute toggle
+  // Helper: draw slider row with icon + label + checkbox
   function drawSliderRow(icon, label, value, y, color, muted) {
     var iconSize = 16
     var iconCx = px + 22, iconCy = y + 4
-    // Icon vertically centered with text
+    // Icon
     if (icon === 'bgm') drawBgmIcon(iconCx, iconCy, iconSize, muted ? t.textDim : (t.text || '#fff'))
     else if (icon === 'sfx') drawSfxIcon(iconCx, iconCy, iconSize, muted ? t.textDim : (t.text || '#fff'))
 
@@ -839,18 +839,30 @@ function drawSettingsPanel(t) {
     ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
     ctx.fillText(label, px + 42, y + 4)
 
-    // Mute mini-toggle at right of label row — small speaker icon
-    var mtX = px + pw - 34, mtY = y + 4
-    ctx.font = '14px Arial'; ctx.textAlign = 'center'
+    // Checkbox at right side, "靜音" label above it
+    var cbW = 22, cbH = 22
+    var cbX = px + pw - 14 - cbW, cbY = y + 16
+    // "靜音" text above checkbox
+    ctx.font = '10px Arial'; ctx.fillStyle = t.textDim; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
+    ctx.fillText('\u975C\u97F3', cbX + cbW / 2, cbY - 2)
+    // Checkbox box
+    ctx.fillStyle = t.btnS || '#333'
+    rr(cbX, cbY, cbW, cbH, 4); ctx.fill()
     if (muted) {
-      // Crossed-out speaker
-      drawMuteIcon(mtX, mtY, 12, '#e74c3c')
-    } else {
-      drawSfxIcon(mtX, mtY, 12, '#2ED573')
+      // Filled + checkmark
+      ctx.fillStyle = color
+      rr(cbX + 2, cbY + 2, cbW - 4, cbH - 4, 3); ctx.fill()
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5
+      ctx.beginPath()
+      ctx.moveTo(cbX + 5, cbY + cbH / 2); ctx.lineTo(cbX + 9, cbY + cbH - 5); ctx.lineTo(cbX + cbW - 4, cbY + 5)
+      ctx.stroke()
     }
+    ctx.strokeStyle = muted ? color : (t.textDim || '#555'); ctx.lineWidth = 1.5
+    rr(cbX, cbY, cbW, cbH, 4); ctx.stroke()
 
     // Slider track
-    var slX = px + 22, slY = y + 24, slW = pw - 60, slH = 8
+    var slW = pw - 22 - 14 - cbW - 12  // left margin to right margin minus checkbox area
+    var slX = px + 22, slY = y + 24, slH = 8
     ctx.fillStyle = t.btnS || '#333'
     rr(slX, slY, slW, slH, 4); ctx.fill()
     // Fill gradient
@@ -862,8 +874,11 @@ function drawSettingsPanel(t) {
       ctx.fillStyle = grad
       rr(slX, slY, Math.max(8, fillW), slH, 4); ctx.fill()
     }
-    // Knob
+    // Percentage above knob
     var knobX = slX + fillW
+    ctx.font = 'bold 10px Arial'; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
+    ctx.fillText(Math.round(value * 100) + '%', knobX, slY - 4)
+    // Knob
     ctx.beginPath(); ctx.arc(knobX, slY + slH / 2, 10, 0, Math.PI * 2)
     ctx.fillStyle = '#fff'; ctx.fill()
     ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.stroke()
@@ -874,11 +889,11 @@ function drawSettingsPanel(t) {
 
   // BGM row
   var bgmY = py + 55
-  drawSliderRow('bgm', '\u80CC\u666F\u97F3\u6A02', bgmVolume, bgmY, '#4A90D9', soundMuted)
+  drawSliderRow('bgm', '\u80CC\u666F\u97F3\u6A02', bgmVolume, bgmY, '#4A90D9', bgmMuted)
 
   // SFX row
   var sfxY = py + 115
-  drawSliderRow('sfx', '\u97F3\u6548', sfxVolume, sfxY, '#2ED573', soundMuted)
+  drawSliderRow('sfx', '\u97F3\u6548', sfxVolume, sfxY, '#2ED573', sfxMuted)
 
   if (inGame) {
     // Continue button

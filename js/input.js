@@ -1,5 +1,21 @@
 // ===== INPUT HANDLING =====
 
+var _dragSlider = null  // 'bgm' | 'sfx' | null — which slider is being dragged
+
+function _getSliderLayout() {
+  var inGame = (state === 'playing' || state === 'item_select')
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 200
+  var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
+  // Slider track positions (must match drawSettingsPanel)
+  var bgmY = panY + 55
+  var sfxY = panY + 115
+  var cbW = 32  // checkbox area width on right
+  return {
+    bgm: { x: panX + 22, y: bgmY + 24, w: pw - 22 - 12 - cbW },
+    sfx: { x: panX + 22, y: sfxY + 24, w: pw - 22 - 12 - cbW }
+  }
+}
+
 canvas.addEventListener('touchstart', function(e) {
   e.preventDefault()
   var touch = e.touches[0]
@@ -13,23 +29,13 @@ canvas.addEventListener('touchmove', function(e) {
   var rect = canvas.getBoundingClientRect()
   var px = touch.clientX - rect.left
   var py = touch.clientY - rect.top
-  // Settings slider drag
-  if (showSettings) {
-    var inGame = (state === 'playing' || state === 'item_select')
-    var pw = Math.min(280, W - 40), ph = inGame ? 420 : 290
-    var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
-    // BGM slider
-    var bgmSlX = panX + 44, bgmSlY = panY + 78, bgmSlW = pw - 70
-    if (py >= bgmSlY - 12 && py <= bgmSlY + 20 && px >= bgmSlX && px <= bgmSlX + bgmSlW) {
-      bgmVolume = Math.max(0, Math.min(1, (px - bgmSlX) / bgmSlW))
-      S.setBgmVolume(bgmVolume); return
-    }
-    // SFX slider
-    var sfxSlX = panX + 44, sfxSlY = panY + 128, sfxSlW = pw - 70
-    if (py >= sfxSlY - 12 && py <= sfxSlY + 20 && px >= sfxSlX && px <= sfxSlX + sfxSlW) {
-      sfxVolume = Math.max(0, Math.min(1, (px - sfxSlX) / sfxSlW))
-      S.setSfxVolume(sfxVolume); return
-    }
+  if (_dragSlider && showSettings) {
+    var lay = _getSliderLayout()
+    var sl = lay[_dragSlider]
+    var val = Math.max(0, Math.min(1, (px - sl.x) / sl.w))
+    if (_dragSlider === 'bgm') { bgmVolume = val; S.setBgmVolume(val) }
+    else { sfxVolume = val; S.setSfxVolume(val) }
+    return
   }
   // Only track hover within board area
   if (py >= boardTop && py <= boardTop + boardH && px >= boardX && px <= boardX + boardW) {
@@ -40,6 +46,7 @@ canvas.addEventListener('touchmove', function(e) {
 }, { passive: false })
 
 canvas.addEventListener('touchend', function(e) {
+  _dragSlider = null
   hoverCol = -1
 }, { passive: false })
 
@@ -52,6 +59,14 @@ canvas.addEventListener('mousemove', function(e) {
   var rect = canvas.getBoundingClientRect()
   var px = e.clientX - rect.left
   var py = e.clientY - rect.top
+  if (_dragSlider && showSettings) {
+    var lay = _getSliderLayout()
+    var sl = lay[_dragSlider]
+    var val = Math.max(0, Math.min(1, (px - sl.x) / sl.w))
+    if (_dragSlider === 'bgm') { bgmVolume = val; S.setBgmVolume(val) }
+    else { sfxVolume = val; S.setSfxVolume(val) }
+    return
+  }
   // Only track hover within board area
   if (py >= boardTop && py <= boardTop + boardH && px >= boardX && px <= boardX + boardW) {
     hoverCol = pixelToCol(px)
@@ -60,7 +75,12 @@ canvas.addEventListener('mousemove', function(e) {
   }
 })
 
+canvas.addEventListener('mouseup', function() {
+  _dragSlider = null
+})
+
 canvas.addEventListener('mouseleave', function() {
+  _dragSlider = null
   hoverCol = -1
 })
 
@@ -284,48 +304,49 @@ function handleSettingsClick(px, py) {
     showSettings = false; return
   }
 
-  // BGM mute icon click (right of label row)
   var bgmY = panY + 55
-  var mt1X = panX + pw - 34, mt1Y = bgmY + 4
-  if (px >= mt1X - 14 && px <= mt1X + 14 && py >= mt1Y - 14 && py <= mt1Y + 14) {
-    soundMuted = !soundMuted; S.setMuted(soundMuted); return
-  }
-
-  // SFX mute icon click
   var sfxY = panY + 115
-  var mt2X = panX + pw - 34, mt2Y = sfxY + 4
-  if (px >= mt2X - 14 && px <= mt2X + 14 && py >= mt2Y - 14 && py <= mt2Y + 14) {
-    soundMuted = !soundMuted; S.setMuted(soundMuted); return
+  var cbW = 32, cbH = 32
+
+  // BGM checkbox (right of slider row)
+  var cb1X = panX + pw - 12 - cbW, cb1Y = bgmY + 12
+  if (px >= cb1X && px <= cb1X + cbW && py >= cb1Y && py <= cb1Y + cbH) {
+    bgmMuted = !bgmMuted; S.setBgmMuted(bgmMuted); return
   }
 
-  // BGM slider
-  var bgmSlX = panX + 22, bgmSlY = bgmY + 24, bgmSlW = pw - 60
-  if (py >= bgmSlY - 12 && py <= bgmSlY + 20 && px >= bgmSlX && px <= bgmSlX + bgmSlW) {
+  // SFX checkbox
+  var cb2X = panX + pw - 12 - cbW, cb2Y = sfxY + 12
+  if (px >= cb2X && px <= cb2X + cbW && py >= cb2Y && py <= cb2Y + cbH) {
+    sfxMuted = !sfxMuted; S.setSfxMuted(sfxMuted); return
+  }
+
+  // BGM slider — start drag
+  var bgmSlX = panX + 22, bgmSlY = bgmY + 24, bgmSlW = pw - 22 - 12 - cbW
+  if (py >= bgmSlY - 16 && py <= bgmSlY + 24 && px >= bgmSlX && px <= bgmSlX + bgmSlW) {
+    _dragSlider = 'bgm'
     bgmVolume = Math.max(0, Math.min(1, (px - bgmSlX) / bgmSlW))
     S.setBgmVolume(bgmVolume); return
   }
 
-  // SFX slider
-  var sfxSlX = panX + 22, sfxSlY = sfxY + 24, sfxSlW = pw - 60
-  if (py >= sfxSlY - 12 && py <= sfxSlY + 20 && px >= sfxSlX && px <= sfxSlX + sfxSlW) {
+  // SFX slider — start drag
+  var sfxSlX = panX + 22, sfxSlY = sfxY + 24, sfxSlW = pw - 22 - 12 - cbW
+  if (py >= sfxSlY - 16 && py <= sfxSlY + 24 && px >= sfxSlX && px <= sfxSlX + sfxSlW) {
+    _dragSlider = 'sfx'
     sfxVolume = Math.max(0, Math.min(1, (px - sfxSlX) / sfxSlW))
     S.setSfxVolume(sfxVolume); return
   }
 
   if (inGame) {
-    // Continue button
     var btnW = pw - 40, btnH = 44
     var btn1Y = panY + 185
     if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn1Y && py <= btn1Y + btnH) {
       showSettings = false; return
     }
-    // Exit button
     var btn2Y = panY + 241
     if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn2Y && py <= btn2Y + btnH) {
       showSettings = false; showExitConfirm = true; return
     }
   } else {
-    // Menu: close button
     var closeY = panY + ph - 60
     var btnW = pw - 40, btnH = 44
     if (px >= panX + 20 && px <= panX + 20 + btnW && py >= closeY && py <= closeY + btnH) {
