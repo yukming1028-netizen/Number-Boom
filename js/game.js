@@ -4,6 +4,14 @@ function startGame(m) {
   mode = m
   if (m === 'daily') {
     var daily = S.getDaily()
+    // Already completed today — cannot replay
+    if (daily.completed) { addToast('\u2705 \u4ECA\u65E5\u5DF2\u5B8C\u6210\uFF01', '\u274C'); return }
+    // No attempts left
+    if ((daily.attempts != null ? daily.attempts : 3) <= 0) { addToast('\u26A0\uFE0F \u6B21\u6578\u7528\u5B8C\uFF01\u770B\u5EE3\u544A\u7372\u5F97\u66F4\u591A', '\u274C'); return }
+    // Consume one attempt
+    S.useDailyAttempt()
+    dailyAttempts = S.getDailyAttempts()
+    dailyMaxAttempts = 3 + (daily.adBonus || 0)
     var ch = daily.challenge
     var cols = ch.cols || 5, rows = ch.rows || 5
     grid = new Grid(cols, rows)
@@ -124,8 +132,8 @@ function checkDailyComplete() {
     for (var k in synthCounts) daily.synthCounts[k] = synthCounts[k]
     S.saveDaily(daily)
     S.addDailyStreak()
-    S.addItem('hammer', 1); S.addItem('swap', 1); S.addItem('lightning', 1)
-    addToast('\uD83C\uDF81 \u901A\u95DC\uFF01\u6BCF\u6B3E\u9053\u5177+1', '\u2705')
+    addToast('\uD83C\uDF89 \u901A\u95DC\uFF01', '\u2705')
+    checkDailyAchievement()
     state = 'gameover'
   }
 }
@@ -147,6 +155,9 @@ function endGame() {
     var daily = S.getDaily()
     daily.synthCounts = {}
     for (var k in synthCounts) daily.synthCounts[k] = synthCounts[k]
+    // Reset attempts count from storage
+    dailyAttempts = S.getDailyAttempts()
+    dailyMaxAttempts = 3 + (daily.adBonus || 0)
     S.saveDaily(daily)
   }
 

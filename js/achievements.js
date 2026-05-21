@@ -10,6 +10,9 @@ const ACHIEVEMENTS = [
   { id: 'cum_score', name: '\u5206\u6578\u5927\u5E2B', desc: '\u6BCF\u7D2F\u7A4D10\u842C\u5206', icon: 'medal', repeatable: true, step: 100000, reward: { hammer: 1 } },
   { id: 'cum_merge', name: '\u5408\u6210\u9054\u4EBA', desc: '\u6BCF\u7D2F\u7A4D1000\u6B21\u5408\u6210', icon: 'merge', repeatable: true, step: 1000, reward: { swap: 1 } },
   { id: 'cum_combo', name: '\u9023\u64CA\u4E4B\u795E', desc: '\u6BCF\u7D2F\u7A4D100\u6B21\u9023\u64CA', icon: 'combo', repeatable: true, step: 100, reward: { lightning: 1 } },
+
+  // === 每日挑戰完成獎勵（可重複）===
+  { id: 'cum_daily', name: '\u6BCF\u65E5\u9054\u4EBA', desc: '\u6BCF\u5B8C\u6210\u4E00\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'calendar', repeatable: true, step: 1, reward: { hammer: 1, swap: 1, lightning: 1 } },
 ]
 
 // Get achievement icon SVG paths
@@ -32,6 +35,9 @@ function getAchievementIcon(type, size) {
       break
     case 'combo':
       cmds = ['M13,2 L4,14 L12,14 L11,22 L20,10 L12,10 Z']
+      break
+    case 'calendar':
+      cmds = ['M5,4 L5,2', 'M19,4 L19,2', 'M3,6 L21,6 L21,22 L3,22 Z', 'M8,11 L16,11', 'M8,15 L14,15']
       break
     default:
       cmds = ['M12,2 L15,9 L22,9 L16.5,14 L18.5,22 L12,17.5 L5.5,22 L7.5,14 L2,9 L9,9 Z']
@@ -131,19 +137,53 @@ function checkComboAchievements(combo) {
   S.saveCumStats(cum)
 }
 
-// Give repeatable tier reward
+// Give repeatable tier reward — mark as pending, player must claim in achievements page
 function giveTierReward(achId, tier) {
   var def = ACHIEVEMENTS.find(function(a) { return a.id === achId })
+  if (!def || !def.reward) return
+  // Store pending reward
+  var pending = S._g('pendingRewards') || []
+  pending.push({ achId: achId, tier: tier, ts: Date.now() })
+  S._s('pendingRewards', pending)
+  var parts = []
+  if (def.reward.hammer) parts.push('\uD83D\uDD28\u00D7' + def.reward.hammer)
+  if (def.reward.swap) parts.push('\uD83D\uDD04\u00D7' + def.reward.swap)
+  if (def.reward.lightning) parts.push('\u26A1\u00D7' + def.reward.lightning)
+  addToast('\uD83C\uDFC6 ' + def.name + ' Lv.' + tier + '\uFF01', '\u2B50')
+}
+
+// Claim a pending reward
+function claimReward(index) {
+  var pending = S._g('pendingRewards') || []
+  if (index < 0 || index >= pending.length) return
+  var pr = pending[index]
+  var def = ACHIEVEMENTS.find(function(a) { return a.id === pr.achId })
   if (!def || !def.reward) return
   var rw = def.reward
   if (rw.hammer) S.addItem('hammer', rw.hammer)
   if (rw.swap) S.addItem('swap', rw.swap)
   if (rw.lightning) S.addItem('lightning', rw.lightning)
+  pending.splice(index, 1)
+  S._s('pendingRewards', pending)
   var parts = []
   if (rw.hammer) parts.push('\uD83D\uDD28\u00D7' + rw.hammer)
   if (rw.swap) parts.push('\uD83D\uDD04\u00D7' + rw.swap)
   if (rw.lightning) parts.push('\u26A1\u00D7' + rw.lightning)
-  addToast('\uD83C\uDFC6 ' + def.name + ' Lv.' + tier + '\uFF01\n\uD83C\uDF81 ' + parts.join(' '), '\u2B50')
+  addToast('\uD83C\uDF81 \u5DF2\u9818\u53D6: ' + parts.join(' '), '\u2705')
+}
+
+// Check daily completion achievement
+function checkDailyAchievement() {
+  var cum = S.getCumStats()
+  cum.dailyCompleted = (cum.dailyCompleted || 0) + 1
+  var lastTier = cum.dailyTier || 0
+  var newTier = Math.floor(cum.dailyCompleted / 1)
+  while (newTier > lastTier) {
+    lastTier++
+    giveTierReward('cum_daily', lastTier)
+  }
+  cum.dailyTier = lastTier
+  S.saveCumStats(cum)
 }
 
 // Unlock a single achievement (theme rewards)

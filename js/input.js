@@ -4,7 +4,7 @@ var _dragSlider = null  // 'bgm' | 'sfx' | null — which slider is being dragge
 
 function _getSliderLayout() {
   var inGame = (state === 'playing' || state === 'item_select')
-  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 240
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 250
   var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
   // Slider track positions (must match drawSettingsPanel)
   var bgmY = panY + 55
@@ -118,6 +118,18 @@ function handleMenuClick(px, py) {
     startGame('daily'); return
   }
 
+  // Watch ad for daily attempt
+  var daily = S.getDaily()
+  if (!daily.completed && (daily.attempts != null ? daily.attempts : 3) <= 0) {
+    var adAttY = dy + 62
+    var adAttW = 160
+    if (px >= W / 2 - adAttW / 2 && px <= W / 2 + adAttW / 2 && py >= adAttY && py <= adAttY + 26) {
+      S.addDailyAdBonus()
+      addToast('\uD83D\uDCFA \u7372\u5F97 +1 \u6B21\u6578\uFF01', '\u2705')
+      return
+    }
+  }
+
   // 無盡模式
   var ey = H - 182
   if (px >= btnX && px <= btnX + btnW && py >= ey && py <= ey + 50) {
@@ -193,24 +205,29 @@ function handleGameOverClick(px, py) {
   var cardH, cy
 
   if (mode === 'daily' && !isComplete) {
-    cardH = 340; cy = H / 2 - cardH / 2
-    // Ad buttons (SVG icons)
-    var adBtnW = 60, adBtnH = 32
-    var adKeys = ['hammer', 'swap', 'lightning']
-    var adStartX = W / 2 - (3 * adBtnW + 2 * 6) / 2
-    var adY = cy + 155
-    for (var i = 0; i < 3; i++) {
-      var ax = adStartX + i * (adBtnW + 6)
-      if (px >= ax && px <= ax + adBtnW && py >= adY && py <= adY + adBtnH) {
-        watchAdForItem(adKeys[i]); return
+    var remAtt = (daily && daily.attempts != null) ? daily.attempts : 0
+    cardH = remAtt > 0 ? 300 : 320; cy = H / 2 - cardH / 2
+    var by = cy + 160
+    if (remAtt > 0) {
+      // Has attempts: retry + menu
+      var btnW2 = 120, btnH2 = 40
+      if (py >= by && py <= by + btnH2) {
+        if (px >= W / 2 - btnW2 - 8 && px <= W / 2 - 8) { startGame('daily'); return }
+        if (px >= W / 2 + 8 && px <= W / 2 + btnW2 + 8) { state = 'menu'; return }
       }
-    }
-    // Retry + Menu
-    var btnW2 = 120, btnH2 = 40
-    var by = cy + 200
-    if (py >= by && py <= by + btnH2) {
-      if (px >= W / 2 - btnW2 - 8 && px <= W / 2 - 8) { startGame('daily'); return }
-      if (px >= W / 2 + 8 && px <= W / 2 + btnW2 + 8) { state = 'menu'; return }
+    } else {
+      // No attempts: watch ad + menu
+      var adAttW2 = 160, adAttH2 = 38
+      if (px >= W / 2 - adAttW2 / 2 && px <= W / 2 + adAttW2 / 2 && py >= by && py <= by + adAttH2) {
+        S.addDailyAdBonus()
+        addToast('\uD83D\uDCFA \u7372\u5F97 +1 \u6B21\u6578\uFF01', '\u2705')
+        return
+      }
+      var menuBy = by + adAttH2 + 8
+      var menuBW = 120, menuBH = 36
+      if (px >= W / 2 - menuBW / 2 && px <= W / 2 + menuBW / 2 && py >= menuBy && py <= menuBy + menuBH) {
+        state = 'menu'; return
+      }
     }
   } else if (mode === 'daily') {
     cardH = 240; cy = H / 2 - cardH / 2
@@ -237,6 +254,22 @@ function handleAutoSummaryClick(px, py) {
 }
 
 function handleAchievementClick(px, py) {
+  // Claim all pending rewards
+  var pending = S._g('pendingRewards') || []
+  if (pending.length > 0) {
+    var cardW = W - margin * 2
+    var startY = 55 - achScrollY
+    var prCardH = 50
+    var claimBtnW = 80, claimBtnH = 28
+    var claimBtnX = margin + cardW - claimBtnW - 8, claimBtnY = startY + prCardH - claimBtnH - 4
+    if (px >= claimBtnX && px <= claimBtnX + claimBtnW && py >= claimBtnY && py <= claimBtnY + claimBtnH) {
+      // Claim all
+      for (var i = pending.length - 1; i >= 0; i--) {
+        claimReward(i)
+      }
+      return
+    }
+  }
   // Back button
   if (py >= H - 50 && py <= H - 10 && px >= W / 2 - 80 && px <= W / 2 + 80) {
     state = 'menu'; achScrollY = 0; return
@@ -296,7 +329,7 @@ function handleLeaderboardClick(px, py) {
 
 function handleSettingsClick(px, py) {
   var inGame = (state === 'playing' || state === 'item_select')
-  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 240
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 250
   var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
 
   // Close X — top right
@@ -347,9 +380,17 @@ function handleSettingsClick(px, py) {
       showSettings = false; showExitConfirm = true; return
     }
   } else {
-    var closeY = panY + ph - 60
-    var btnW = pw - 40, btnH = 44
-    if (px >= panX + 20 && px <= panX + 20 + btnW && py >= closeY && py <= closeY + btnH) {
+    var btnW = (pw - 50) / 2, btnH = 44
+    var btnRowY = panY + ph - 60
+    // Reset button
+    if (px >= panX + 15 && px <= panX + 15 + btnW && py >= btnRowY && py <= btnRowY + btnH) {
+      if (confirm('\u78BA\u5B9A\u6E05\u9664\u6240\u6709\u9032\u5EA6\uFF1F\u4E0D\u53EF\u5FA9\u539F\uFF01')) {
+        S.resetAll(); location.reload()
+      }
+      return
+    }
+    // Close button
+    if (px >= panX + pw - btnW - 15 && px <= panX + pw - 15 && py >= btnRowY && py <= btnRowY + btnH) {
       showSettings = false; return
     }
   }

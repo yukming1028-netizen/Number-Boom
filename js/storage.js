@@ -50,11 +50,15 @@ const S={
     if(!d||d.date!==today){
       const seed=today.split('-').reduce((a,b)=>a+parseInt(b),0)
       const challenges=DAILY_CHALLENGES
-      const ch={date:today,challenge:challenges[seed%challenges.length],completed:false,synthCounts:{}}
+      const ch={date:today,challenge:challenges[seed%challenges.length],completed:false,synthCounts:{},attempts:3,adBonus:0}
       this._s('daily',ch);return ch
     }
     return d
   },
+  getDailyAttempts(){const d=this.getDaily();return d.attempts!=null?d.attempts:3},
+  setDailyAttempts(n){const d=this.getDaily();d.attempts=n;this._s('daily',d)},
+  useDailyAttempt(){const d=this.getDaily();if((d.attempts||3)<=0)return false;d.attempts=(d.attempts||3)-1;this._s('daily',d);return true},
+  addDailyAdBonus(){const d=this.getDaily();d.adBonus=(d.adBonus||0)+1;d.attempts=(d.attempts||0)+1;this._s('daily',d)},
   saveDaily(d){this._s('daily',d)},
   // Player name
   getName(){return this._g('playerName')||'\u73A9\u5BB6'},
@@ -104,6 +108,11 @@ const S={
   // Cumulative stats for achievement tracking
   getCumStats(){return this._g('cumStats')||{totalScore:0,totalMerges:0}},
   saveCumStats(s){this._s('cumStats',s)},
+  // Reset all progress
+  resetAll(){
+    var keys = Object.keys(localStorage).filter(k => k.startsWith('nb2_'))
+    for (var i = 0; i < keys.length; i++) localStorage.removeItem(keys[i])
+  },
   // Test: refresh daily challenge to a random different one
   refreshDaily(){
     const today=new Date().toISOString().slice(0,10)
