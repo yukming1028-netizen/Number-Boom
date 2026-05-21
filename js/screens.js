@@ -264,9 +264,9 @@ function drawBoard(t) {
 function drawItemBar(t) {
   var items = S.getItems()
   var itemTypes = [
-    { key: 'hammer', icon: 'hammer', count: items.hammer, desc: '\u6D88\u9664\u55AE\u683C', emoji: '\uD83D\uDD28' },
-    { key: 'swap', icon: 'swapArrows', count: items.swap, desc: '\u4EA4\u63DB\u4F4D\u7F6E', emoji: '\uD83D\uDD04' },
-    { key: 'lightning', icon: 'bolt', count: items.lightning, desc: '\u540C\u8272\u5168\u6D88', emoji: '\u26A1' },
+    { key: 'hammer', icon: 'hammer', count: items.hammer, desc: '\u6D88\u9664\u55AE\u683C' },
+    { key: 'swap', icon: 'swapArrows', count: items.swap, desc: '\u4EA4\u63DB\u4F4D\u7F6E' },
+    { key: 'lightning', icon: 'bolt', count: items.lightning, desc: '\u540C\u8272\u5168\u6D88' },
   ]
   var ibGap = 6
   var ibW = (boardW - ibGap * 2) / 3
@@ -276,33 +276,41 @@ function drawItemBar(t) {
   for (var i = 0; i < 3; i++) {
     var ix = boardX + i * (ibW + ibGap)
     var isActive = itemSelectType === itemTypes[i].key
+    var activeBg = isActive ? (t.accent || '#ffd700') : null
     drawBtn(ix, ibY, ibW, ibH, isActive ? (t.accent || '#ffd700') : t.btnS, 8)
 
-    // Icon on left side
-    drawSvgIcon(ix + 16, ibY + ibH / 2, 22, itemTypes[i].icon, t.header)
+    // When active: use dark text for contrast against accent bg; otherwise normal colors
+    var iconColor = isActive ? '#000' : (t.header || '#fff')
+    var textColor = isActive ? '#000' : (t.text || '#fff')
+    var countColor = isActive ? 'rgba(0,0,0,0.7)' : (t.accent || '#ffd700')
+    var dimColor = isActive ? 'rgba(0,0,0,0.45)' : (t.textDim || '#888')
 
-    // Text block on right side
-    var textX = ix + 34
+    // Icon centered at left portion
+    var iconCx = ix + ibW * 0.2
+    drawSvgIcon(iconCx, ibY + ibH / 2, 22, itemTypes[i].icon, iconColor)
+
+    // Text block centered in remaining space
+    var textCx = ix + ibW * 0.62
     ctx.save()
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-    ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 2
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.shadowColor = isActive ? 'transparent' : 'rgba(0,0,0,0.4)'; ctx.shadowBlur = isActive ? 0 : 2
 
-    // Description — bold 11px
-    ctx.font = 'bold 11px Arial'
-    ctx.fillStyle = t.text || '#fff'
-    ctx.fillText(itemTypes[i].desc, textX, ibY + 18)
+    // Description
+    ctx.font = 'bold 13px Arial'
+    ctx.fillStyle = textColor
+    ctx.fillText(itemTypes[i].desc, textCx, ibY + 18)
 
-    // Count — prominent accent color
-    ctx.font = 'bold 12px Arial'
+    // Count
+    ctx.font = 'bold 13px Arial'
     if (itemTypes[i].count > 0) {
-      ctx.fillStyle = t.accent || '#ffd700'
-      ctx.fillText('\u00D7' + itemTypes[i].count, textX, ibY + 38)
+      ctx.fillStyle = countColor
+      ctx.fillText('\u00D7' + itemTypes[i].count, textCx, ibY + 38)
     } else if (mode === 'daily') {
-      ctx.fillStyle = '#ffd700'
-      ctx.fillText('\uD83D\uDCFA+1', textX, ibY + 38)
+      ctx.fillStyle = countColor
+      ctx.fillText('\uD83D\uDCFA+1', textCx, ibY + 38)
     } else {
-      ctx.fillStyle = t.textDim
-      ctx.fillText('\u00D70', textX, ibY + 38)
+      ctx.fillStyle = dimColor
+      ctx.fillText('\u00D70', textCx, ibY + 38)
     }
     ctx.restore()
   }
