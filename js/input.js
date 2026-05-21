@@ -276,7 +276,7 @@ function handleLeaderboardClick(px, py) {
 
 function handleSettingsClick(px, py) {
   var inGame = (state === 'playing' || state === 'item_select')
-  var pw = Math.min(280, W - 40), ph = inGame ? 420 : 290
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 200
   var panX = W / 2 - pw / 2, panY = H / 2 - ph / 2
 
   // Close X — top right
@@ -284,35 +284,43 @@ function handleSettingsClick(px, py) {
     showSettings = false; return
   }
 
+  // BGM mute icon click (right of label row)
+  var bgmY = panY + 55
+  var mt1X = panX + pw - 34, mt1Y = bgmY + 4
+  if (px >= mt1X - 14 && px <= mt1X + 14 && py >= mt1Y - 14 && py <= mt1Y + 14) {
+    soundMuted = !soundMuted; S.setMuted(soundMuted); return
+  }
+
+  // SFX mute icon click
+  var sfxY = panY + 115
+  var mt2X = panX + pw - 34, mt2Y = sfxY + 4
+  if (px >= mt2X - 14 && px <= mt2X + 14 && py >= mt2Y - 14 && py <= mt2Y + 14) {
+    soundMuted = !soundMuted; S.setMuted(soundMuted); return
+  }
+
   // BGM slider
-  var bgmSlX = panX + 44, bgmSlY = panY + 78, bgmSlW = pw - 70
+  var bgmSlX = panX + 22, bgmSlY = bgmY + 24, bgmSlW = pw - 60
   if (py >= bgmSlY - 12 && py <= bgmSlY + 20 && px >= bgmSlX && px <= bgmSlX + bgmSlW) {
     bgmVolume = Math.max(0, Math.min(1, (px - bgmSlX) / bgmSlW))
     S.setBgmVolume(bgmVolume); return
   }
 
   // SFX slider
-  var sfxSlX = panX + 44, sfxSlY = panY + 128, sfxSlW = pw - 70
+  var sfxSlX = panX + 22, sfxSlY = sfxY + 24, sfxSlW = pw - 60
   if (py >= sfxSlY - 12 && py <= sfxSlY + 20 && px >= sfxSlX && px <= sfxSlX + sfxSlW) {
     sfxVolume = Math.max(0, Math.min(1, (px - sfxSlX) / sfxSlW))
     S.setSfxVolume(sfxVolume); return
   }
 
-  // Mute toggle
-  var mtX = panX + pw / 2, mtY = panY + 166
-  if (px >= mtX - 50 && px <= mtX + 50 && py >= mtY - 14 && py <= mtY + 14) {
-    soundMuted = !soundMuted; S.setMuted(soundMuted); return
-  }
-
   if (inGame) {
     // Continue button
     var btnW = pw - 40, btnH = 44
-    var btn1Y = panY + 200
+    var btn1Y = panY + 185
     if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn1Y && py <= btn1Y + btnH) {
       showSettings = false; return
     }
     // Exit button
-    var btn2Y = panY + 256
+    var btn2Y = panY + 241
     if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btn2Y && py <= btn2Y + btnH) {
       showSettings = false; showExitConfirm = true; return
     }

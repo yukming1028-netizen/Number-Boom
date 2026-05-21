@@ -793,50 +793,56 @@ function drawSettingsPanel(t) {
   if (!showSettings) return
   var inGame = (state === 'playing' || state === 'item_select')
 
-  // Overlay — lower opacity
+  // Overlay
   ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H)
 
-  var pw = Math.min(280, W - 40), ph = inGame ? 420 : 290
+  var pw = Math.min(280, W - 40), ph = inGame ? 340 : 200
   var px = W / 2 - pw / 2, py = H / 2 - ph / 2
 
-  // Card — more transparent
+  // Card
   ctx.save()
   ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 20
   ctx.fillStyle = t.board ? hexToRgba(t.board, 0.88) : 'rgba(26,26,46,0.88)'
   rr(px, py, pw, ph, 16); ctx.fill()
   ctx.shadowBlur = 0
-  // Border
   ctx.strokeStyle = t.accent || '#ffd700'; ctx.lineWidth = 1.5
   rr(px, py, pw, ph, 16); ctx.stroke()
   ctx.restore()
 
   // Close X — top right
-  ctx.fillStyle = t.textDim; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'
-  ctx.fillText('\u2715', px + pw - 20, py + 16)
+  ctx.fillStyle = t.textDim; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('\u2715', px + pw - 20, py + 18)
 
   // Title with gear icon
-  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 18px Arial'
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-  drawSettingsGear(W / 2 - 40, py + 12, 14, t.accent || '#ffd700')
-  ctx.fillText('\u8A2D\u5B9A', W / 2 + 2, py + 16)
+  var titleY = py + 24
+  drawSettingsGear(W / 2 - 40, titleY, 14, t.accent || '#ffd700')
+  ctx.fillStyle = t.text || '#fff'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText('\u8A2D\u5B9A', W / 2 + 2, titleY)
 
-  // Helper: draw beautiful slider with icon
-  function drawSliderRow(icon, label, value, y, color) {
-    // Icon
-    if (icon === 'bgm') drawBgmIcon(px + 18, y - 2, 16, t.text || '#fff')
-    else if (icon === 'sfx') drawSfxIcon(px + 18, y - 2, 16, t.text || '#fff')
+  // Helper: draw slider row with icon + label + mute toggle
+  function drawSliderRow(icon, label, value, y, color, muted) {
+    var iconSize = 16
+    var iconCx = px + 22, iconCy = y + 4
+    // Icon vertically centered with text
+    if (icon === 'bgm') drawBgmIcon(iconCx, iconCy, iconSize, muted ? t.textDim : (t.text || '#fff'))
+    else if (icon === 'sfx') drawSfxIcon(iconCx, iconCy, iconSize, muted ? t.textDim : (t.text || '#fff'))
 
     // Label
-    ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'left'
-    ctx.fillText(label, px + 44, y)
+    ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    ctx.fillText(label, px + 42, y + 4)
 
-    // Percentage
-    ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'right'
-    ctx.fillText(Math.round(value * 100) + '%', px + pw - 20, y)
+    // Mute mini-toggle at right of label row — small speaker icon
+    var mtX = px + pw - 34, mtY = y + 4
+    ctx.font = '14px Arial'; ctx.textAlign = 'center'
+    if (muted) {
+      // Crossed-out speaker
+      drawMuteIcon(mtX, mtY, 12, '#e74c3c')
+    } else {
+      drawSfxIcon(mtX, mtY, 12, '#2ED573')
+    }
 
-    // Slider track — rounded gradient
-    var slX = px + 44, slY = y + 20, slW = pw - 70, slH = 8
-    // Track bg
+    // Slider track
+    var slX = px + 22, slY = y + 24, slW = pw - 60, slH = 8
     ctx.fillStyle = t.btnS || '#333'
     rr(slX, slY, slW, slH, 4); ctx.fill()
     // Fill gradient
@@ -848,7 +854,7 @@ function drawSettingsPanel(t) {
       ctx.fillStyle = grad
       rr(slX, slY, Math.max(8, fillW), slH, 4); ctx.fill()
     }
-    // Knob — circle with glow
+    // Knob
     var knobX = slX + fillW
     ctx.beginPath(); ctx.arc(knobX, slY + slH / 2, 10, 0, Math.PI * 2)
     ctx.fillStyle = '#fff'; ctx.fill()
@@ -858,48 +864,34 @@ function drawSettingsPanel(t) {
     ctx.fillStyle = color; ctx.fill()
   }
 
-  // BGM slider
-  drawSliderRow('bgm', '\u80CC\u666F\u97F3\u6A02', bgmVolume, py + 52, '#4A90D9')
+  // BGM row
+  var bgmY = py + 55
+  drawSliderRow('bgm', '\u80CC\u666F\u97F3\u6A02', bgmVolume, bgmY, '#4A90D9', soundMuted)
 
-  // SFX slider
-  drawSliderRow('sfx', '\u97F3\u6548', sfxVolume, py + 100, '#2ED573')
-
-  // Mute toggle — pill switch
-  var mtX = px + pw / 2, mtY = py + 160
-  var swW = 50, swH = 26, swR = 13
-  // Track
-  ctx.fillStyle = soundMuted ? '#e74c3c' : '#2ED573'
-  rr(mtX - swW / 2, mtY - swH / 2, swW, swH, swR); ctx.fill()
-  // Knob circle
-  var knobOff = soundMuted ? swW / 2 - swR : -(swW / 2 - swR)
-  ctx.beginPath(); ctx.arc(mtX + knobOff, mtY, swR - 3, 0, Math.PI * 2)
-  ctx.fillStyle = '#fff'; ctx.fill()
-  // Label
-  ctx.font = 'bold 13px Arial'; ctx.fillStyle = t.text || '#fff'; ctx.textAlign = 'center'
-  ctx.fillText(soundMuted ? '\uD83D\uDD07 \u5DF2\u975C\u97F3' : '\uD83D\uDD0A \u97F3\u91CF\u958B', mtX, mtY - 20)
+  // SFX row
+  var sfxY = py + 115
+  drawSliderRow('sfx', '\u97F3\u6548', sfxVolume, sfxY, '#2ED573', soundMuted)
 
   if (inGame) {
     // Continue button
     var btnW = pw - 40, btnH = 44
-    var btn1Y = py + 200
+    var btn1Y = py + 185
     drawBtn(px + 20, btn1Y, btnW, btnH, t.accent || '#ffd700', 10)
-    ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
-    drawPlayIcon(W / 2 - 44, btn1Y + btnH / 2 - 7, 12, '#000')
-    ctx.fillText('\u7E7C\u7E8C\u904A\u6232', W / 2 + 2, btn1Y + btnH / 2)
+    ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('\u25B6  \u7E7C\u7E8C\u904A\u6232', W / 2, btn1Y + btnH / 2)
 
     // Exit button
-    var btn2Y = py + 256
+    var btn2Y = py + 241
     drawBtn(px + 20, btn2Y, btnW, btnH, '#e74c3c', 10)
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
-    drawExitIcon(W / 2 - 44, btn2Y + btnH / 2 - 7, 12, '#fff')
-    ctx.fillText('\u9000\u51FA\u904A\u6232', W / 2 + 2, btn2Y + btnH / 2)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('\u2715  \u9000\u51FA\u904A\u6232', W / 2, btn2Y + btnH / 2)
   } else {
-    // Menu: just a close button
+    // Menu: close button
     var btnW = pw - 40, btnH = 44
     var closeBtnY = py + ph - 60
     drawBtn(px + 20, closeBtnY, btnW, btnH, t.accent || '#ffd700', 10)
-    ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'
-    ctx.fillText('\u2715 \u95DC\u9589', W / 2, closeBtnY + btnH / 2)
+    ctx.fillStyle = '#000'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('\u2715  \u95DC\u9589', W / 2, closeBtnY + btnH / 2)
   }
 }
 
@@ -1062,6 +1054,32 @@ function drawExitIcon(cx, cy, size, color) {
   ctx.moveTo(cx + s * 0.25, cy - s * 0.35)
   ctx.lineTo(cx + s * 0.6, cy)
   ctx.lineTo(cx + s * 0.25, cy + s * 0.35)
+  ctx.stroke()
+  ctx.restore()
+}
+
+// Mute icon — speaker with X
+function drawMuteIcon(cx, cy, size, color) {
+  ctx.save()
+  ctx.fillStyle = color; ctx.strokeStyle = color
+  ctx.lineWidth = Math.max(1.5, size / 8)
+  var s = size * 0.5
+  // Speaker body
+  ctx.beginPath()
+  ctx.moveTo(cx - s * 0.5, cy - s * 0.2)
+  ctx.lineTo(cx - s * 0.5, cy + s * 0.2)
+  ctx.lineTo(cx - s * 0.1, cy + s * 0.2)
+  ctx.lineTo(cx + s * 0.4, cy + s * 0.65)
+  ctx.lineTo(cx + s * 0.4, cy - s * 0.65)
+  ctx.lineTo(cx - s * 0.1, cy - s * 0.2)
+  ctx.closePath(); ctx.fill()
+  // X over it
+  ctx.lineWidth = Math.max(1.5, size / 7)
+  ctx.beginPath()
+  ctx.moveTo(cx + s * 0.2, cy - s * 0.4)
+  ctx.lineTo(cx + s * 0.8, cy + s * 0.4)
+  ctx.moveTo(cx + s * 0.8, cy - s * 0.4)
+  ctx.lineTo(cx + s * 0.2, cy + s * 0.4)
   ctx.stroke()
   ctx.restore()
 }
