@@ -107,7 +107,7 @@ function handleMenuClick(px, py) {
     var iconSpan = 3 * MI_GAP + MI_H
     var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 - 25 : 65
     if (py >= iconY0 && py < iconY0 + MI_H) { showSettings = true; return }
-    if (py >= iconY0 + MI_GAP && py < iconY0 + MI_GAP + MI_H) { state = 'themes'; return }
+    if (py >= iconY0 + MI_GAP && py < iconY0 + MI_GAP + MI_H) { state = 'themes'; S.markThemesSeen(); return }
     if (py >= iconY0 + MI_GAP * 2 && py < iconY0 + MI_GAP * 2 + MI_H) { state = 'achievements'; return }
     if (py >= iconY0 + MI_GAP * 3 && py < iconY0 + MI_GAP * 3 + MI_H) { state = 'leaderboard'; return }
   }
@@ -136,9 +136,9 @@ function handleMenuClick(px, py) {
     startGame('endless'); return
   }
 
-  // Test buttons (3 side by side)
+  // Test buttons (4 side by side)
   var testY = H - 120
-  var tbW = Math.floor((btnW - 8) / 3)
+  var tbW = Math.floor((btnW - 12) / 4)
   if (py >= testY && py <= testY + 34) {
     if (px >= btnX && px <= btnX + tbW) {
       S.refreshDaily(); state = 'menu'; return
@@ -148,6 +148,12 @@ function handleMenuClick(px, py) {
     }
     if (px >= btnX + (tbW + 4) * 2 && px <= btnX + (tbW + 4) * 2 + tbW) {
       startGame('daily'); startAutoPlay('daily'); return
+    }
+    if (px >= btnX + (tbW + 4) * 3 && px <= btnX + (tbW + 4) * 3 + tbW) {
+      if (confirm('\u78BA\u5B9A\u6E05\u9664\u6240\u6709\u9032\u5EA6\uFF1F\u4E0D\u53EF\u5FA9\u539F\uFF01')) {
+        S.resetAll(); location.reload()
+      }
+      return
     }
   }
 }
@@ -380,17 +386,10 @@ function handleSettingsClick(px, py) {
       showSettings = false; showExitConfirm = true; return
     }
   } else {
-    var btnW = (pw - 50) / 2, btnH = 44
+    var btnW = pw - 40, btnH = 44
     var btnRowY = panY + ph - 60
-    // Reset button
-    if (px >= panX + 15 && px <= panX + 15 + btnW && py >= btnRowY && py <= btnRowY + btnH) {
-      if (confirm('\u78BA\u5B9A\u6E05\u9664\u6240\u6709\u9032\u5EA6\uFF1F\u4E0D\u53EF\u5FA9\u539F\uFF01')) {
-        S.resetAll(); location.reload()
-      }
-      return
-    }
-    // Close button
-    if (px >= panX + pw - btnW - 15 && px <= panX + pw - 15 && py >= btnRowY && py <= btnRowY + btnH) {
+    // Close button only
+    if (px >= panX + 20 && px <= panX + 20 + btnW && py >= btnRowY && py <= btnRowY + btnH) {
       showSettings = false; return
     }
   }

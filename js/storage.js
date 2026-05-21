@@ -31,11 +31,15 @@ const S={
   setTheme(t){this._s('theme',t)},
   getUnlockedThemes(){
     const saved=this._g('unlocked')
-    if(saved&&saved.length===THEMES.length) return saved
-    const all=THEMES.map(t=>t.id)
-    this._s('unlocked',all)
-    return all
+    if(saved) return saved
+    this._s('unlocked',['classic'])
+    return ['classic']
   },
+  getUnseenThemes(){ return this._g('unseenThemes') || [] },
+  addUnseenTheme(id){ var u=this._g('unseenThemes')||[]; if(!u.includes(id)){u.push(id);this._s('unseenThemes',u)} },
+  markThemesSeen(){ this._s('unseenThemes',[]) },
+  getDailyCompleted(){ return this._g('dailyCompleted') || 0 },
+  addDailyCompleted(){ var n=(this._g('dailyCompleted')||0)+1; this._s('dailyCompleted',n); return n },
   unlockTheme(id){const u=this.getUnlockedThemes();if(u.includes(id))return false;u.push(id);this._s('unlocked',u);return true},
   // Best scores
   getBestEndless(){return this._g('best_endless')||0},

@@ -34,12 +34,28 @@ function drawMenu(t) {
   var iconTotalH = 4 * MI_H + 3 * (MI_GAP - MI_H) // total span of 4 icons
   var iconSpan = 3 * MI_GAP + MI_H
   var iconY0 = (_coverBoardY != null) ? _coverBoardY + (_coverBoardH - iconSpan) / 2 - 25 : 65
+  // Check for badge dots
+  var hasPendingRewards = (S._g('pendingRewards') || []).length > 0
+  var unseenThemes = S.getUnseenThemes()
+  var hasUnseenThemes = unseenThemes.length > 0
+
   for (var i = 0; i < 4; i++) {
     var iy = iconY0 + i * MI_GAP
     drawBtn(iconX, iy, MI_W, MI_H, t.btnS, 10)
     drawSvgIcon(iconX + MI_W / 2, iy + 17, 26, iconTypes[i], t.header)
     ctx.font = '9px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
     ctx.fillText(iconLabels[i], iconX + MI_W / 2, iy + 42)
+    // Red dot badge: palette(1) for themes, trophy(2) for achievements
+    if (i === 1 && hasUnseenThemes) {
+      ctx.beginPath(); ctx.arc(iconX + MI_W - 4, iy + 4, 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#e74c3c'; ctx.fill()
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke()
+    }
+    if (i === 2 && hasPendingRewards) {
+      ctx.beginPath(); ctx.arc(iconX + MI_W - 4, iy + 4, 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#e74c3c'; ctx.fill()
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke()
+    }
   }
 
   // Daily challenge info
@@ -47,7 +63,7 @@ function drawMenu(t) {
   var ch = daily.challenge
   var done = daily.completed
   var attempts = daily.attempts != null ? daily.attempts : 3
-  var maxAttempts = 3 + (daily.adBonus || 0)
+  var maxAttempts = 3
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillStyle = t.textDim; ctx.font = '11px Arial'
   var gridLabel = (ch.cols || 5) + '\u00D7' + (ch.rows || 5)
@@ -68,8 +84,9 @@ function drawMenu(t) {
   ctx.fillStyle = '#fff'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center'
   ctx.fillText('\u6BCF \u65E5 \u6311 \u6230', W / 2, dy + 22)
   ctx.restore()
+  var attLabel = done ? '' : '  (' + attempts + '/3)'
   ctx.font = '10px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.textAlign = 'center'
-  ctx.fillText(ch.desc + ' | ' + gridLabel, W / 2, dy + 44)
+  ctx.fillText(ch.desc + ' | ' + gridLabel + attLabel, W / 2, dy + 44)
 
   // Watch ad for attempts (only if not completed and no attempts left)
   if (!done && attempts <= 0) {
@@ -91,16 +108,21 @@ function drawMenu(t) {
   ctx.font = '10px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.textAlign = 'center'
   ctx.fillText('\u6700\u9AD8: ' + S.getBestEndless(), W / 2, ey + 38)
 
-  // Test buttons (3 side by side)
+  // Test buttons (4 side by side) — test only
   var testY = H - 120
-  var tbW = Math.floor((btnW - 8) / 3)
+  var tbW = Math.floor((btnW - 12) / 4)
+  ctx.save(); ctx.globalAlpha = 0.6
   drawBtn(btnX, testY, tbW, 34, t.btnS, 8)
-  ctx.fillStyle = t.textDim; ctx.font = '11px Arial'; ctx.textAlign = 'center'
+  ctx.fillStyle = t.textDim; ctx.font = '10px Arial'; ctx.textAlign = 'center'
   ctx.fillText('\uD83D\uDD04\u5237\u65B0', btnX + tbW / 2, testY + 17)
   drawBtn(btnX + tbW + 4, testY, tbW, 34, t.btnS, 8)
   ctx.fillText('\uD83E\uDD16\u7121\u76E1', btnX + tbW + 4 + tbW / 2, testY + 17)
   drawBtn(btnX + (tbW + 4) * 2, testY, tbW, 34, t.btnS, 8)
   ctx.fillText('\uD83E\uDD16\u6BCF\u65E5', btnX + (tbW + 4) * 2 + tbW / 2, testY + 17)
+  drawBtn(btnX + (tbW + 4) * 3, testY, tbW, 34, '#e74c3c', 8)
+  ctx.fillStyle = '#fff'; ctx.font = '10px Arial'
+  ctx.fillText('\uD83D\uDDD1\u6E05\u9664', btnX + (tbW + 4) * 3 + tbW / 2, testY + 17)
+  ctx.restore()
 
   // Stats — hidden per user request
 }
@@ -114,11 +136,7 @@ function drawGameScreen(t) {
   ctx.fillStyle = t.header; ctx.font = 'bold 15px Arial'
   var modeLabel = mode === 'daily' ? '\uD83D\uDCC5 \u6BCF\u65E5\u6311\u6230' : '\uD83C\uDFAE \u7121\u76E1\u6A21\u5F0F'
   ctx.fillText(modeLabel, W / 2, 4)
-  // Attempts indicator for daily (right of mode label)
-  if (mode === 'daily') {
-    ctx.textAlign = 'right'; ctx.font = '11px Arial'; ctx.fillStyle = t.textDim
-    ctx.fillText('\u26A1' + dailyAttempts + '/' + dailyMaxAttempts, W - 40, 6)
-  }
+  // Attempts indicator removed from game screen per user request
 
   // Settings gear — top right, prominent
   if (!showSettings) {
@@ -398,13 +416,13 @@ function drawGameOver(t) {
       // Show remaining attempts
       var remAttempts = daily.attempts != null ? daily.attempts : 0
       ctx.font = '12px Arial'; ctx.fillStyle = t.textDim; ctx.textAlign = 'center'
-      ctx.fillText('\u5269\u9918\u6B21\u6578: ' + remAttempts, W / 2, cy + 140)
+      ctx.fillText('\u5269\u9918\u6B21\u6578: ' + remAttempts + '/3', W / 2, cy + 140)
       var by = cy + 160
       if (remAttempts > 0) {
         var btnW2 = 120, btnH2 = 40
         drawBtn(W / 2 - btnW2 - 8, by, btnW2, btnH2, t.btnP, 10)
         ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'
-        ctx.fillText('\u518D\u4F86\u4E00\u5C40', W / 2 - btnW2 / 2 - 8, by + btnH2 / 2)
+        ctx.fillText('\u518D\u4F86\u4E00\u5C40(' + remAttempts + ')', W / 2 - btnW2 / 2 - 8, by + btnH2 / 2)
         drawBtn(W / 2 + 8, by, btnW2, btnH2, t.btnS, 10)
         ctx.fillStyle = t.header
         ctx.fillText('\u56DE\u83DC\u55AE', W / 2 + btnW2 / 2 + 8, by + btnH2 / 2)
@@ -672,19 +690,19 @@ function drawThemes(t) {
   ctx.fillText('\uD83C\uDFA8 \u9078\u64C7\u4E3B\u984C', W / 2, 30)
 
   var unlocked = S.getUnlockedThemes()
-  var streak = S.getDailyStreak()
   var cols = 3, thW = 90, thH = 85, gap = 10
   var totalW = cols * thW + (cols - 1) * gap
   var startX = W / 2 - totalW / 2, startY = 58
 
   // Theme unlock conditions
+  var dailyCount = S.getDailyCompleted()
   var themeConditions = {
-    'ocean': { type: 'streak', target: 5 },
-    'cyber': { type: 'streak', target: 10 },
-    'sunset': { type: 'streak', target: 15 },
-    'forest': { type: 'streak', target: 20 },
-    'kawaii': { type: 'streak', target: 25 },
-    'ink': { type: 'streak', target: 30 },
+    'ocean': { type: 'daily_count', target: 5 },
+    'cyber': { type: 'daily_count', target: 10 },
+    'sunset': { type: 'daily_count', target: 15 },
+    'forest': { type: 'daily_count', target: 20 },
+    'kawaii': { type: 'daily_count', target: 25 },
+    'ink': { type: 'daily_count', target: 30 },
     'rainbow': { type: 'ach', name: '\u4EBA\u751F\u662F\u5F69\u8272\u7684' },
     'white': { type: 'hidden' },
     'obsidian': { type: 'hidden' },
@@ -716,14 +734,14 @@ function drawThemes(t) {
       ctx.fillText('???', x + thW / 2, y + thH * 0.6)
       ctx.font = '8px Arial'
       ctx.fillText('\u96B1\u85CF', x + thW / 2, y + thH * 0.8)
-    } else if (cond && cond.type === 'streak') {
-      // Streak unlock
+    } else if (cond && cond.type === 'daily_count') {
+      // Daily completion count unlock
       ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
       ctx.fillText('\uD83D\uDCC5', x + thW / 2, y + thH * 0.25)
       ctx.font = 'bold 10px Arial'; ctx.fillStyle = t.textDim
-      ctx.fillText(cond.target + '\u5929', x + thW / 2, y + thH * 0.5)
+      ctx.fillText(cond.target + '\u6B21', x + thW / 2, y + thH * 0.5)
       // Mini progress
-      var prog2 = Math.min(1, streak / cond.target)
+      var prog2 = Math.min(1, dailyCount / cond.target)
       var pbarW = thW - 16, pbarH = 4
       var pbarX = x + 8, pbarY = y + thH * 0.68
       ctx.fillStyle = t.btnS || '#333'
@@ -731,7 +749,7 @@ function drawThemes(t) {
       ctx.fillStyle = t.accent || '#ffd700'
       rr(pbarX, pbarY, pbarW * prog2, pbarH, 2); ctx.fill()
       ctx.font = '8px Arial'; ctx.fillStyle = t.textDim
-      ctx.fillText(streak + '/' + cond.target, x + thW / 2, y + thH * 0.88)
+      ctx.fillText(dailyCount + '/' + cond.target, x + thW / 2, y + thH * 0.88)
     } else if (cond && cond.type === 'ach') {
       // Achievement unlock
       ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = t.textDim
@@ -981,17 +999,12 @@ function drawSettingsPanel(t) {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillText('\u2715  \u9000\u51FA\u904A\u6232', W / 2, btn2Y + btnH / 2)
   } else {
-    // Menu: reset + close buttons
-    var btnW = (pw - 50) / 2, btnH = 44
+    // Menu: only close button
+    var btnW = pw - 40, btnH = 44
     var btnRowY = py + ph - 60
-    // Reset button
-    drawBtn(px + 15, btnRowY, btnW, btnH, '#e74c3c', 8)
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('\uD83D\uDDD1 \u6E05\u9664', px + 15 + btnW / 2, btnRowY + btnH / 2)
-    // Close button
-    drawBtn(px + pw - btnW - 15, btnRowY, btnW, btnH, t.accent || '#ffd700', 8)
-    ctx.fillStyle = '#000'; ctx.font = 'bold 13px Arial'
-    ctx.fillText('\u95DC\u9589', px + pw - btnW - 15 + btnW / 2, btnRowY + btnH / 2)
+    drawBtn(px + 20, btnRowY, btnW, btnH, t.accent || '#ffd700', 8)
+    ctx.fillStyle = '#000'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('\u95DC\u9589', px + 20 + btnW / 2, btnRowY + btnH / 2)
   }
 }
 

@@ -11,7 +11,7 @@ function startGame(m) {
     // Consume one attempt
     S.useDailyAttempt()
     dailyAttempts = S.getDailyAttempts()
-    dailyMaxAttempts = 3 + (daily.adBonus || 0)
+    dailyMaxAttempts = 3
     var ch = daily.challenge
     var cols = ch.cols || 5, rows = ch.rows || 5
     grid = new Grid(cols, rows)
@@ -66,7 +66,7 @@ function doDrop(col) {
     }
 
     // Score — 2x during fever
-    var gained = result.score * (feverActive ? 2 : 1)
+    var gained = result.score * (feverActive ? 5 : 1)
     score += gained
 
     if (result.chains > maxCombo) maxCombo = result.chains
@@ -157,7 +157,7 @@ function endGame() {
     for (var k in synthCounts) daily.synthCounts[k] = synthCounts[k]
     // Reset attempts count from storage
     dailyAttempts = S.getDailyAttempts()
-    dailyMaxAttempts = 3 + (daily.adBonus || 0)
+    dailyMaxAttempts = 3
     S.saveDaily(daily)
   }
 
@@ -166,7 +166,7 @@ function endGame() {
   cum.totalScore = (cum.totalScore || 0) + score
   S.saveCumStats(cum)
   checkScoreAchievements(cum.totalScore)
-  checkDailyStreakThemes()
+  checkDailyCountThemes()
 }
 
 function useItemAction(type) {

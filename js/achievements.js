@@ -13,6 +13,14 @@ const ACHIEVEMENTS = [
 
   // === 每日挑戰完成獎勵（可重複）===
   { id: 'cum_daily', name: '\u6BCF\u65E5\u9054\u4EBA', desc: '\u6BCF\u5B8C\u6210\u4E00\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'calendar', repeatable: true, step: 1, reward: { hammer: 1, swap: 1, lightning: 1 } },
+
+  // === 每日完成次數解鎖主題成就 ===
+  { id: 'daily_ocean', name: '\u6D77\u6D0B\u4E4B\u5FC3', desc: '\u5B8C\u62105\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'medal', reward: { type: 'theme', id: 'ocean' } },
+  { id: 'daily_cyber', name: '\u8CFD\u535A\u5D1B\u8D77', desc: '\u5B8C\u621010\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'medal', reward: { type: 'theme', id: 'cyber' } },
+  { id: 'daily_sunset', name: '\u65E5\u843D\u9918\u8F5D', desc: '\u5B8C\u621015\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'medal', reward: { type: 'theme', id: 'sunset' } },
+  { id: 'daily_forest', name: '\u68EE\u6797\u79D8\u5883', desc: '\u5B8C\u621020\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'medal', reward: { type: 'theme', id: 'forest' } },
+  { id: 'daily_kawaii', name: '\u53EF\u611B\u842C\u6B72', desc: '\u5B8C\u621025\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'medal', reward: { type: 'theme', id: 'kawaii' } },
+  { id: 'daily_ink', name: '\u6C34\u58A8\u5C71\u6C34', desc: '\u5B8C\u621030\u6B21\u6BCF\u65E5\u6311\u6230', icon: 'medal', reward: { type: 'theme', id: 'ink' } },
 ]
 
 // Get achievement icon SVG paths
@@ -160,16 +168,26 @@ function claimReward(index) {
   var def = ACHIEVEMENTS.find(function(a) { return a.id === pr.achId })
   if (!def || !def.reward) return
   var rw = def.reward
-  if (rw.hammer) S.addItem('hammer', rw.hammer)
-  if (rw.swap) S.addItem('swap', rw.swap)
-  if (rw.lightning) S.addItem('lightning', rw.lightning)
+  // Theme reward: unlock theme + add to unseen
+  if (rw.type === 'theme' || pr.themeId) {
+    var themeId = rw.id || pr.themeId
+    S.unlockTheme(themeId)
+    S.addUnseenTheme(themeId)
+    var thDef = THEMES.find(function(t) { return t.id === themeId })
+    addToast('\uD83C\uDF81 \u5DF2\u9818\u53D6\uFF1A' + (thDef ? thDef.name : themeId), '\u2705')
+  } else {
+    // Item rewards
+    if (rw.hammer) S.addItem('hammer', rw.hammer)
+    if (rw.swap) S.addItem('swap', rw.swap)
+    if (rw.lightning) S.addItem('lightning', rw.lightning)
+    var parts = []
+    if (rw.hammer) parts.push('\uD83D\uDD28\u00D7' + rw.hammer)
+    if (rw.swap) parts.push('\uD83D\uDD04\u00D7' + rw.swap)
+    if (rw.lightning) parts.push('\u26A1\u00D7' + rw.lightning)
+    addToast('\uD83C\uDF81 \u5DF2\u9818\u53D6: ' + parts.join(' '), '\u2705')
+  }
   pending.splice(index, 1)
   S._s('pendingRewards', pending)
-  var parts = []
-  if (rw.hammer) parts.push('\uD83D\uDD28\u00D7' + rw.hammer)
-  if (rw.swap) parts.push('\uD83D\uDD04\u00D7' + rw.swap)
-  if (rw.lightning) parts.push('\u26A1\u00D7' + rw.lightning)
-  addToast('\uD83C\uDF81 \u5DF2\u9818\u53D6: ' + parts.join(' '), '\u2705')
 }
 
 // Check daily completion achievement
@@ -184,9 +202,29 @@ function checkDailyAchievement() {
   }
   cum.dailyTier = lastTier
   S.saveCumStats(cum)
+
+  // Increment global daily completed count for theme unlocks
+  var totalCount = S.addDailyCompleted()
+
+  // Check daily count theme achievements
+  var ach = S.getAchievements()
+  var dailyAchievements = [
+    { id: 'daily_ocean', count: 5 },
+    { id: 'daily_cyber', count: 10 },
+    { id: 'daily_sunset', count: 15 },
+    { id: 'daily_forest', count: 20 },
+    { id: 'daily_kawaii', count: 25 },
+    { id: 'daily_ink', count: 30 },
+  ]
+  for (var i = 0; i < dailyAchievements.length; i++) {
+    var da = dailyAchievements[i]
+    if (totalCount >= da.count && !ach[da.id]) {
+      unlockAchievement(da.id, ach)
+    }
+  }
 }
 
-// Unlock a single achievement (theme rewards)
+// Unlock a single achievement (theme rewards → pending)
 function unlockAchievement(id, ach) {
   var def = ACHIEVEMENTS.find(function(a) { return a.id === id })
   if (!def) return
@@ -195,30 +233,33 @@ function unlockAchievement(id, ach) {
 
   var rw = def.reward
   if (rw.type === 'theme') {
-    if (S.unlockTheme(rw.id)) {
-      var thDef = THEMES.find(function(t) { return t.id === rw.id })
-      addToast('\uD83C\uDFC6 \u6210\u5C31\u89E3\u9396\uFF1A' + def.revealName + '\uFF01\n\uD83C\uDFA8 \u4E3B\u984C\uFF1A' + (thDef ? thDef.name : rw.id), '\u2B50')
-    }
+    // Add to pending rewards — player must claim in achievements page
+    var pending = S._g('pendingRewards') || []
+    pending.push({ achId: id, ts: Date.now(), themeId: rw.id })
+    S._s('pendingRewards', pending)
+    var dispName = def.hidden ? def.revealName : def.name
+    addToast('\uD83C\uDFC6 \u6210\u5C31\u9054\u6210\uFF1A' + dispName + '\uFF01', '\u2B50')
   }
 }
 
-// Check daily streak theme unlocks
-function checkDailyStreakThemes() {
-  var streak = S.getDailyStreak()
+// Check daily completion count theme unlocks
+function checkDailyCountThemes() {
+  var count = S.getDailyCompleted()
   var milestoneThemes = [
-    { streak: 5, themeId: 'ocean' },
-    { streak: 10, themeId: 'cyber' },
-    { streak: 15, themeId: 'sunset' },
-    { streak: 20, themeId: 'forest' },
-    { streak: 25, themeId: 'kawaii' },
-    { streak: 30, themeId: 'ink' },
+    { count: 5, themeId: 'ocean' },
+    { count: 10, themeId: 'cyber' },
+    { count: 15, themeId: 'sunset' },
+    { count: 20, themeId: 'forest' },
+    { count: 25, themeId: 'kawaii' },
+    { count: 30, themeId: 'ink' },
   ]
   for (var i = 0; i < milestoneThemes.length; i++) {
     var ms = milestoneThemes[i]
-    if (streak >= ms.streak) {
+    if (count >= ms.count) {
       if (S.unlockTheme(ms.themeId)) {
         var thDef = THEMES.find(function(t) { return t.id === ms.themeId })
-        addToast('\uD83D\uDCC5 \u6BCF\u65E5' + ms.streak + '\u5929\uFF01\u89E3\u9396\uFF1A' + (thDef ? thDef.name : ms.themeId), '\uD83C\uDF89')
+        addToast('\uD83C\uDFC6 \u5B8C\u6210' + ms.count + '\u6B21\u6BCF\u65E5\uFF01\u89E3\u9396\uFF1A' + (thDef ? thDef.name : ms.themeId), '\uD83C\uDF89')
+        S.addUnseenTheme(ms.themeId)
       }
     }
   }
