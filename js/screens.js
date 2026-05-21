@@ -632,9 +632,11 @@ function drawThemes(t) {
     drawBtn(x, y, thW, thH, isActive ? t.accent : t.btnS, 10)
 
     if (isUnlocked) {
-      ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = th.header
+      var labelColor = isActive ? '#000' : (t.text || '#fff')
+      var iconColor = isActive ? '#000' : th.header
+      ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = iconColor
       ctx.fillText(th.icon, x + thW / 2, y + thH * 0.3)
-      ctx.font = '10px Arial'; ctx.fillStyle = t.text || '#fff'
+      ctx.font = '10px Arial'; ctx.fillStyle = labelColor
       ctx.fillText(th.name, x + thW / 2, y + thH * 0.6)
     } else if (cond && cond.type === 'hidden') {
       // Hidden theme — show ???
